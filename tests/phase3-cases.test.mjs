@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const sql=readFileSync("supabase/migrations/202608200013_phase3_case_management.sql","utf8");
+const counselling=readFileSync("src/services/counsellingService.ts","utf8");
+const applications=readFileSync("src/services/applicationService.ts","utf8");
+for(const item of ["course_shortlists","application_events","case_tasks","create_counselling_record","create_university_application","advance_application_stage","create_case_task","has_permission('applications.edit')"])assert.ok(sql.includes(item),`Missing Phase 3 contract: ${item}`);
+assert.ok(!counselling.includes("localStorage"),"Counselling must use live storage");
+assert.ok(!applications.includes("localStorage"),"Applications must use live storage");
+assert.ok(applications.includes('rpc("advance_application_stage"'),"Stage changes must be audited server-side");
+console.log("Phase 3 case management contract: PASS");

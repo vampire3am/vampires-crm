@@ -1,0 +1,10 @@
+import { supabase } from "../lib/supabase";
+
+export interface CounsellingRecord { id:string;studentName:string;studentCode:string;counsellorName:string;consultationDate:string;targetCountry:string;preferredCourse:string;stageOutcome:"Eligible for Direct Entry"|"Language Prep Required"|"Financial Documentation Review"|"University Shortlisted"|"On Hold";followUpDate:string;notes:string }
+type Row={id:string;notes:string;follow_up_date:string|null;created_at:string;target_country:string|null;preferred_course:string|null;outcome:CounsellingRecord["stageOutcome"]|null;students?:{full_name:string;student_code:string}|null;staff_profiles?:{full_name:string}|null};
+const format=(value:string)=>new Intl.DateTimeFormat("en-NP",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Kathmandu"}).format(new Date(value));
+
+export const CounsellingService={
+ async getRecords():Promise<CounsellingRecord[]>{const{data,error}=await supabase.from("counselling_records").select("id,notes,follow_up_date,created_at,target_country,preferred_course,outcome,students(full_name,student_code),staff_profiles!counselling_records_assigned_staff_fkey(full_name)").order("created_at",{ascending:false});if(error)throw error;return((data??[])as unknown as Row[]).map(r=>({id:r.id,studentName:r.students?.full_name??"Unknown student",studentCode:r.students?.student_code??"—",counsellorName:r.staff_profiles?.full_name??"Unassigned",consultationDate:format(r.created_at),targetCountry:r.target_country??"Undecided",preferredCourse:r.preferred_course??"Undecided",stageOutcome:r.outcome??"On Hold",followUpDate:r.follow_up_date??"",notes:r.notes}))},
+ async createRecord(record:Omit<CounsellingRecord,"id">){const{data,error}=await supabase.rpc("create_counselling_record",{payload:{student_code:record.studentCode,target_country:record.targetCountry,preferred_course:record.preferredCourse,outcome:record.stageOutcome,follow_up_date:record.followUpDate,notes:record.notes}});if(error)throw error;return data as string},
+};

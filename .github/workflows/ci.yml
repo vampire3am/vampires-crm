@@ -1,0 +1,28 @@
+name: CRM quality gate
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx tsc -b --pretty false
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://igzrcgicslcgbowzrtzz.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_lPKVBwVDgvO_uf8nlSSUsA_FqOAC1Yg
+      - name: Upload production preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-production-preview
+          path: dist
+          retention-days: 7
+      - run: npm audit --omit=dev --audit-level=high

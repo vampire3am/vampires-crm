@@ -1,0 +1,579 @@
+/* =========================================================================
+   MESSENGER-STYLE COLLABORATION INTERFACE (PIXEL-PERFECT META MESSENGER UX)
+   ========================================================================= */
+
+.messenger-container {
+  display: flex;
+  height: calc(100vh - 120px);
+  min-height: 560px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  position: relative;
+}
+
+/* -------------------------------------------------------------------------
+   LEFT PANE: MESSENGER CHATS SIDEBAR (340px)
+   ------------------------------------------------------------------------- */
+.messenger-sidebar {
+  width: 340px;
+  min-width: 320px;
+  max-width: 360px;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.messenger-sidebar-header {
+  padding: 16px 18px 10px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.messenger-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.messenger-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.messenger-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg-card-subtle);
+  border: none;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.messenger-icon-btn:hover {
+  background: var(--border-subtle);
+}
+
+.messenger-search-pill {
+  position: relative;
+  width: 100%;
+}
+
+.messenger-search-input {
+  width: 100%;
+  height: 36px;
+  background: var(--bg-card-subtle);
+  border: 1px solid transparent;
+  border-radius: 18px;
+  padding: 0 14px 0 36px;
+  font-size: 13px;
+  color: var(--text-main);
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.messenger-search-input:focus {
+  border-color: #F97316;
+  background: var(--bg-card);
+  box-shadow: 0 0 0 2px rgba(0, 132, 255, 0.15);
+}
+
+.messenger-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Category Filter Tabs */
+.messenger-filter-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 18px 10px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.messenger-filter-chip {
+  padding: 5px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: var(--bg-card-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.messenger-filter-chip:hover {
+  background: var(--border-subtle);
+  color: var(--text-main);
+}
+
+.messenger-filter-chip.active {
+  background: rgba(0, 132, 255, 0.12);
+  color: #F97316;
+  font-weight: 700;
+}
+
+/* Chats List Scroll */
+.messenger-chat-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.messenger-chat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.messenger-chat-item:hover {
+  background: var(--bg-card-subtle);
+}
+
+.messenger-chat-item.active {
+  background: rgba(0, 132, 255, 0.1);
+}
+
+/* Messenger Avatar with Online Indicator */
+.messenger-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.messenger-avatar-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.messenger-presence-badge {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #31A24C;
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 0 4px rgba(49, 162, 76, 0.5);
+}
+
+.messenger-chat-meta {
+  flex: 1;
+  overflow: hidden;
+}
+
+.messenger-chat-top-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.messenger-chat-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-main);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.messenger-chat-item.active .messenger-chat-name {
+  color: #F97316;
+  font-weight: 700;
+}
+
+.messenger-chat-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.messenger-chat-preview-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.messenger-chat-snippet {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.messenger-unread-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #F97316;
+  flex-shrink: 0;
+}
+
+/* -------------------------------------------------------------------------
+   CENTER PANE: MESSENGER MAIN CHAT WINDOW
+   ------------------------------------------------------------------------- */
+.messenger-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+/* Messenger Chat Header */
+.messenger-main-header {
+  height: 64px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.messenger-main-header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.messenger-header-details h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.messenger-header-details span {
+  font-size: 11.5px;
+  color: #31A24C;
+  font-weight: 500;
+}
+
+.messenger-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Messenger Message Stream Area */
+.messenger-messages-stream {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-card);
+}
+
+/* Welcome Card in Conversation */
+.messenger-welcome-card {
+  text-align: center;
+  padding: 30px 20px 20px 20px;
+  margin: 0 auto;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.messenger-welcome-avatar {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 24px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+/* Messenger Bubble Rows */
+.messenger-msg-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 4px;
+  position: relative;
+}
+
+.messenger-msg-row.outgoing {
+  justify-content: flex-end;
+}
+
+.messenger-msg-row.incoming {
+  justify-content: flex-start;
+}
+
+.messenger-bubble-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+/* The Exact Messenger Bubble */
+.messenger-bubble {
+  max-width: 65%;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  word-break: break-word;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Incoming Bubble (Grey/Dark Pill) */
+.messenger-msg-row.incoming .messenger-bubble {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  border-radius: 18px 18px 18px 4px;
+}
+
+/* Outgoing Bubble (Messenger Gradient Blue) */
+.messenger-msg-row.outgoing .messenger-bubble {
+  background: linear-gradient(135deg, #F97316 0%, #0B1E3B 100%);
+  color: #FFFFFF;
+  border-radius: 18px 18px 4px 18px;
+}
+
+/* Hover Action / Emoji Tray on Bubbles */
+.messenger-bubble-actions {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 3px 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.messenger-msg-row.outgoing .messenger-bubble-actions {
+  left: -85px;
+}
+
+.messenger-msg-row.incoming .messenger-bubble-actions {
+  right: -85px;
+}
+
+.messenger-msg-row:hover .messenger-bubble-actions {
+  display: flex;
+}
+
+.messenger-reaction-pill {
+  position: absolute;
+  bottom: -10px;
+  right: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1px 5px;
+  font-size: 11px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* -------------------------------------------------------------------------
+   MESSENGER COMPOSER TOOLBAR (BOTTOM)
+   ------------------------------------------------------------------------- */
+.messenger-composer-bar {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.messenger-composer-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.messenger-action-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: #F97316;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.messenger-action-icon-btn:hover {
+  background: var(--bg-card-subtle);
+}
+
+.messenger-input-wrap {
+  flex: 1;
+  background: var(--bg-card-subtle);
+  border: 1px solid transparent;
+  border-radius: 20px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  transition: all 0.15s ease;
+}
+
+.messenger-input-wrap:focus-within {
+  background: var(--bg-card);
+  border-color: #F97316;
+  box-shadow: 0 0 0 2px rgba(0, 132, 255, 0.15);
+}
+
+.messenger-text-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 13.5px;
+  color: var(--text-main);
+  outline: none;
+  font-family: inherit;
+  padding: 8px 0;
+}
+
+/* Giant Blue Thumbs Up or Send Button */
+.messenger-send-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: #F97316;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.messenger-send-btn:hover {
+  transform: scale(1.15);
+}
+
+/* -------------------------------------------------------------------------
+   RIGHT PANE: MESSENGER PROFILE & INFO DRAWER (300px)
+   ------------------------------------------------------------------------- */
+.messenger-info-drawer {
+  width: 300px;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 24px 18px;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.messenger-info-profile-card {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.messenger-info-avatar-large {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 26px;
+  font-weight: 800;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.messenger-info-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0 0 2px 0;
+}
+
+.messenger-info-role {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: block;
+}
+
+.messenger-info-status {
+  font-size: 11.5px;
+  color: #31A24C;
+  font-weight: 600;
+  margin-top: 4px;
+}

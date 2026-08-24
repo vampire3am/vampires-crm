@@ -1,0 +1,519 @@
+/* Shared operational-directory treatment modelled on the Lead Directory. */
+.table-wrapper:has(> .crm-table),
+.email-table-container,
+.table-scroll:has(> table) {
+  padding: 10px 14px 16px;
+  background: #f8fafc;
+}
+
+.table-wrapper > .crm-table,
+.email-table-container > .email-table,
+.table-scroll > table {
+  width: 100%;
+  border-collapse: separate !important;
+  border-spacing: 0 8px !important;
+}
+
+.table-wrapper > .crm-table thead th,
+.email-table-container > .email-table thead th,
+.table-scroll > table thead th {
+  padding: 8px 14px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text-muted);
+  font-size: 10px !important;
+  font-weight: 750;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table-wrapper > .crm-table tbody tr:not(.skeleton-row),
+.email-table-container > .email-table tbody tr:not(.skeleton-row),
+.table-scroll > table tbody tr:not(.skeleton-row) {
+  background: #fff !important;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--border-subtle) !important;
+  transition: background-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.table-wrapper > .crm-table tbody tr:not(.skeleton-row):hover,
+.email-table-container > .email-table tbody tr:not(.skeleton-row):hover,
+.table-scroll > table tbody tr:not(.skeleton-row):hover {
+  background: #fff !important;
+  box-shadow: 0 0 0 1px #fb923c, 0 6px 18px rgba(15, 23, 42, .07) !important;
+  transform: translateY(-1px);
+}
+
+.table-wrapper > .crm-table tbody td,
+.email-table-container > .email-table tbody td,
+.table-scroll > table tbody td {
+  padding: 14px !important;
+  border: 0 !important;
+  background: transparent !important;
+  vertical-align: middle;
+}
+
+.table-wrapper > .crm-table tbody td:first-child,
+.email-table-container > .email-table tbody td:first-child,
+.table-scroll > table tbody td:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.table-wrapper > .crm-table tbody td:last-child,
+.email-table-container > .email-table tbody td:last-child,
+.table-scroll > table tbody td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.table-wrapper > .crm-table tbody td strong,
+.email-table-container > .email-table tbody td strong,
+.table-scroll > table tbody td strong {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.table-wrapper > .crm-table tbody td small,
+.email-table-container > .email-table tbody td small,
+.table-scroll > table tbody td small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  line-height: 1.35;
+  font-size: 10.5px;
+}
+
+.crm-panel:has(> .table-wrapper > .crm-table),
+.crm-panel:has(.table-wrapper > .crm-table) {
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.table-wrapper > .crm-table tbody td > div,
+.email-table-container > .email-table tbody td > div,
+.table-scroll > table tbody td > div {
+  min-width: 0;
+}
+
+.table-wrapper > .crm-table tbody td:last-child,
+.email-table-container > .email-table tbody td:last-child,
+.table-scroll > table tbody td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table-wrapper > .crm-table .table-actions,
+.email-table-container > .email-table .table-actions,
+.table-scroll > table .table-actions {
+  gap: 6px;
+}
+
+.table-wrapper > .crm-table .table-btn,
+.email-table-container > .email-table .table-btn,
+.table-scroll > table .table-btn {
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+@media (max-width: 760px) {
+  .table-wrapper:has(> .crm-table),
+  .email-table-container,
+  .table-scroll:has(> table) { padding: 8px; }
+}
+
+/* Applications has its own dense legacy rules; force the same visual contract as Leads. */
+.application-directory-panel .table-wrapper {
+  padding: 10px 14px 16px !important;
+  background: #f8fafc !important;
+}
+
+.application-directory-table {
+  min-width: 1120px;
+  border-collapse: separate !important;
+  border-spacing: 0 8px !important;
+}
+
+.application-directory-table thead th {
+  padding: 6px 12px !important;
+  border: 0 !important;
+  background: transparent !important;
+  font-size: 10px !important;
+}
+
+.application-directory-table tbody tr {
+  background: #fff !important;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--border-subtle) !important;
+}
+
+.application-directory-table tbody tr:hover {
+  background: #fff !important;
+  box-shadow: 0 0 0 1px #fb923c, 0 6px 18px rgba(15, 23, 42, .07) !important;
+}
+
+.application-directory-table tbody td {
+  padding: 14px 12px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.application-directory-table tbody td:first-child { border-radius: 10px 0 0 10px; }
+.application-directory-table tbody td:last-child { border-radius: 0 10px 10px 0; }
+
+.application-directory-table .application-university-cell,
+.application-directory-table .application-study-cell,
+.application-directory-table .application-finance-cell {
+  display: grid;
+  gap: 3px;
+}
+
+.application-directory-table .application-university-cell { min-width: 205px; }
+.application-directory-table .application-study-cell { min-width: 145px; }
+.application-directory-table .application-university-cell small,
+.application-directory-table .application-study-cell small,
+.application-directory-table .application-finance-cell small {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.application-directory-table .application-finance-cell small { color: #059669; }
+
+/* Keep every operational directory as calm and compact as the Leads directory. */
+.table-wrapper > .crm-table tbody td,
+.email-table-container > .email-table tbody td,
+.table-scroll > table tbody td {
+  line-height: 1.35;
+}
+
+.table-wrapper > .crm-table .badge-status,
+.table-wrapper > .crm-table [class*="status-badge"],
+.table-wrapper > .crm-table [class*="stage-badge"] {
+  white-space: nowrap;
+}
+
+/* Applications is intentionally last in the cascade: legacy feature rules must
+   not collapse the workspace back into the old dense strip layout. */
+.application-workspace {
+  width: min(100%, 1480px) !important;
+  max-width: 1480px !important;
+  display: grid !important;
+  gap: 24px !important;
+  margin-inline: auto !important;
+  padding: 28px 32px 52px !important;
+}
+
+.application-workspace .page-header-row {
+  align-items: flex-end !important;
+  margin: 0 !important;
+  padding: 0 2px !important;
+}
+
+.application-workspace .page-header-titles h2 {
+  margin: 8px 0 7px !important;
+  font-size: 28px !important;
+  line-height: 1.15 !important;
+  letter-spacing: -.03em !important;
+}
+
+.application-workspace .page-header-titles p {
+  max-width: 760px !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+.application-executive-summary {
+  margin: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.application-executive-summary > header {
+  padding: 0 2px 12px !important;
+  border: 0 !important;
+}
+
+.application-executive-summary > header strong { font-size: 14px !important; }
+.application-executive-summary > header span,
+.application-executive-summary > header small { font-size: 11px !important; }
+
+.application-metrics-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+  margin: 0 !important;
+}
+
+.application-metrics-grid .metric-box {
+  min-height: 158px !important;
+  padding: 21px !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 15px !important;
+  background: #fff !important;
+  box-shadow: 0 7px 22px rgba(15, 23, 42, .055) !important;
+}
+
+.application-metrics-grid .metric-box:not(:last-child) {
+  border-right: 1px solid var(--border-subtle) !important;
+}
+
+.application-metrics-grid .metric-header { margin-bottom: 16px !important; }
+.application-metrics-grid .metric-label { font-size: 12.5px !important; font-weight: 650 !important; }
+.application-metrics-grid .metric-value { margin-bottom: 9px !important; font-size: 32px !important; }
+.application-metrics-grid .metric-icon-wrap { width: 40px !important; height: 40px !important; border-radius: 11px !important; }
+.application-metrics-grid [class*="kpi-trend"] { margin-top: 0 !important; font-size: 11px !important; line-height: 1.45 !important; }
+
+.application-workspace .case-task-panel {
+  margin: 0 !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 15px !important;
+  background: #fff !important;
+  box-shadow: 0 7px 22px rgba(15, 23, 42, .045) !important;
+}
+
+.application-workspace .case-task-header {
+  min-height: 82px !important;
+  padding: 17px 22px !important;
+  background: linear-gradient(90deg, #fff 0%, #fff 72%, #fff7ed 100%) !important;
+}
+
+.application-workspace .case-task-list { min-height: 82px !important; }
+
+.application-directory-panel {
+  margin: 0 !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  box-shadow: 0 8px 26px rgba(15, 23, 42, .055) !important;
+}
+
+.application-directory-heading {
+  display: block !important;
+  padding: 22px 24px 10px !important;
+  background: #fff !important;
+}
+
+.application-directory-heading h3 { font-size: 18px !important; }
+.application-directory-heading p { margin-top: 5px !important; font-size: 12px !important; }
+
+.application-directory-panel .application-directory-toolbar {
+  gap: 12px !important;
+  padding: 12px 24px 16px !important;
+  border: 0 !important;
+}
+
+.application-directory-panel .application-directory-toolbar > .search-input-wrap {
+  min-width: 380px !important;
+  min-height: 42px !important;
+}
+
+.application-directory-panel .application-stage-tabs {
+  gap: 8px !important;
+  padding: 13px 24px !important;
+  border-top: 1px solid var(--border-subtle) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  background: #f8fafc !important;
+}
+
+.application-directory-panel .application-stage-tabs button {
+  min-height: 32px !important;
+  padding: 6px 13px !important;
+  font-size: 11px !important;
+}
+
+.application-directory-panel > .application-table-body .table-wrapper {
+  padding: 14px 18px 20px !important;
+}
+
+.application-directory-table {
+  min-width: 980px !important;
+}
+
+.application-directory-table tbody td {
+  padding: 17px 13px !important;
+}
+
+/* Applications directory mirrors the Students directory row-card contract. */
+.application-directory-panel {
+  overflow: hidden !important;
+  box-shadow: none !important;
+}
+
+.application-directory-panel .application-directory-heading {
+  padding: 20px 20px 8px !important;
+}
+
+.application-directory-panel .application-directory-toolbar {
+  align-items: stretch !important;
+  gap: 14px !important;
+  padding: 14px 20px 18px !important;
+}
+
+.application-directory-panel .application-directory-toolbar .search-input-wrap,
+.application-directory-panel .application-directory-toolbar .crm-select {
+  height: 40px !important;
+  border-radius: 8px !important;
+}
+
+.application-directory-panel .application-stage-tabs {
+  gap: 7px !important;
+  padding: 11px 20px !important;
+  overflow-x: auto !important;
+}
+
+.application-directory-panel > .application-table-body .table-wrapper {
+  padding: 10px 14px 16px !important;
+  background: #f8fafc !important;
+}
+
+.application-directory-table {
+  min-width: 1080px !important;
+  border-collapse: separate !important;
+  border-spacing: 0 8px !important;
+  table-layout: auto !important;
+}
+
+.application-directory-table thead th {
+  padding: 5px 13px !important;
+  font-size: 9.5px !important;
+}
+
+.application-directory-table tbody tr {
+  height: 72px !important;
+}
+
+.application-directory-table tbody td {
+  padding: 14px 13px !important;
+  font-size: 12px !important;
+}
+
+.application-candidate-cell {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 220px;
+}
+
+.application-candidate-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.application-candidate-copy strong,
+.application-university-cell strong,
+.application-study-cell strong,
+.application-finance-cell strong {
+  font-size: 12.5px !important;
+  line-height: 1.3 !important;
+}
+
+.application-directory-table .application-university-cell { min-width: 230px !important; }
+.application-directory-table .application-study-cell { min-width: 150px !important; }
+.application-directory-table .application-finance-cell { min-width: 130px !important; }
+
+.application-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  min-width: 92px;
+}
+
+.application-row-actions .btn-secondary {
+  min-height: 30px;
+  border-radius: 7px !important;
+  background: #f8fafc !important;
+}
+
+.application-student-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.application-dossier-vault {
+  padding: 15px;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #fffaf5;
+}
+
+.application-dossier-vault > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #0f172a;
+}
+
+.application-dossier-vault > header div { display: grid; gap: 3px; }
+.application-dossier-vault > header span { color: #ea580c; font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.application-dossier-vault > header strong { font-size: 14px; }
+.application-dossier-vault > header small { color: #64748b; font-size: 10.5px; }
+.application-dossier-vault > header > svg { color: #059669; }
+
+.application-dossier-upload-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.application-dossier-upload-actions .btn-primary,
+.application-dossier-upload-actions .btn-secondary {
+  min-height: 36px;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.application-dossier-files { display: grid; gap: 7px; margin-top: 12px; }
+.application-dossier-files article {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) 28px 28px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+.application-dossier-files article > svg { color: #f97316; }
+.application-dossier-files article div { display: grid; gap: 2px; min-width: 0; }
+.application-dossier-files article strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.application-dossier-files article span { color: #64748b; font-size: 9.5px; }
+.application-dossier-files article button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+}
+.application-dossier-empty { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px; border-radius: 8px; background: #fff; color: #64748b; font-size: 10.5px; }
+.application-vault-more { padding: 6px; border: 0; background: transparent; color: #ea580c; font-size: 10.5px; font-weight: 700; cursor: pointer; }
+
+@media (max-width: 560px) {
+  .application-dossier-upload-actions { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 1180px) {
+  .application-workspace { padding-inline: 22px !important; }
+  .application-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .application-directory-panel .application-directory-toolbar > .search-input-wrap { min-width: 100% !important; }
+}
+
+@media (max-width: 720px) {
+  .application-workspace { gap: 16px !important; padding: 18px 14px 36px !important; }
+  .application-workspace .page-header-row { align-items: flex-start !important; }
+  .application-metrics-grid { grid-template-columns: 1fr !important; }
+  .application-directory-heading,
+  .application-directory-panel .application-directory-toolbar,
+  .application-directory-panel .application-stage-tabs { padding-left: 15px !important; padding-right: 15px !important; }
+}

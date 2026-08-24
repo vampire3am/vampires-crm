@@ -1,0 +1,2 @@
+import { Clock3 } from "lucide-react";
+export function PlaceholderPage({title,description}:{title:string;description:string}){return <><section className="page-heading"><div><p className="eyebrow">AECS workspace</p><h2>{title}</h2><p>{description}</p></div></section><article className="panel empty-panel"><div className="empty-state"><div><Clock3 size={24}/></div><h3>{title} is coming later</h3><p>This area is intentionally reserved for a future project phase.</p></div></article></>}

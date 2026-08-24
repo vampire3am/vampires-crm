@@ -1,0 +1,41 @@
+/* Universal context indicators for KPI descriptions across every CRM workspace. */
+.metric-box .metric-sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 16px;
+}
+
+.metric-box .metric-sub:not(.metric-signal)::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--indicator-color, var(--accent-blue));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--indicator-color, var(--accent-blue)) 12%, transparent);
+}
+
+.metrics-grid-4 > .metric-box:nth-child(4n + 1) { --indicator-color: #f97316; }
+.metrics-grid-4 > .metric-box:nth-child(4n + 2) { --indicator-color: #f59e0b; }
+.metrics-grid-4 > .metric-box:nth-child(4n + 3) { --indicator-color: #8b5cf6; }
+.metrics-grid-4 > .metric-box:nth-child(4n + 4) { --indicator-color: #10b981; }
+
+.metrics-grid-4 > .metric-box:nth-child(5n) { --indicator-color: #10b981; }
+
+@media (prefers-contrast: more) {
+  .metric-box .metric-sub:not(.metric-signal)::before { box-shadow: 0 0 0 1px currentColor; }
+}
+
+.kpi-trend-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 16px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.kpi-trend-indicator.up { color: var(--success-text, #047857); }
+.kpi-trend-indicator.down { color: var(--danger-text, #b42318); }
+.kpi-trend-indicator.neutral { color: var(--text-muted, #667085); }
+.kpi-trend-indicator.neutral svg { width: 7px; height: 7px; }

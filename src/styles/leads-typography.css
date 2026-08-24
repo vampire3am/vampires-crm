@@ -1,0 +1,102 @@
+/* Keep the Leads workspace on the CRM's standard readable type scale. */
+.lead-directory-heading h3 { font-size: 16px; }
+.lead-directory-heading p,
+.lead-reset-button { font-size: 12.5px; }
+.lead-search input,
+.lead-filter-toolbar .crm-select,
+.lead-view-switcher button { font-size: 12.5px; }
+.lead-table { font-size: 12.5px; }
+.lead-table thead th { font-size: 11px; }
+.lead-avatar { font-size: 12px; }
+.lead-code-line .account-code-cell { font-size: 10.5px; }
+.lead-contact-cell > span,
+.lead-source-pill,
+.lead-study-cell strong,
+.lead-study-cell span,
+.lead-owner-cell span { font-size: 12.5px; }
+.lead-contact-cell small,
+.lead-study-cell small { font-size: 11px; }
+.lead-priority { font-size: 10.5px; }
+.lead-enrolled-action { font-size: 12px; }
+.lead-empty-state strong { font-size: 14px; }
+.lead-empty-state span { font-size: 12.5px; }
+
+/* Lead profile drawer: readable spacing and non-collapsing operational forms. */
+.lead-dossier-drawer { max-width: min(100%, 560px); }
+.lead-dossier-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.lead-dossier-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 22px;
+  padding: 24px;
+  overflow-y: auto;
+}
+.lead-dossier-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+  font-size: 13px;
+}
+.lead-dossier-summary span { margin-bottom: 4px; font-size: 12px; }
+.lead-dossier-summary strong { font-size: 13px; line-height: 1.4; }
+.phase2-followups > strong { display: block; margin-bottom: 10px; font-size: 14px; }
+.lead-followup-form {
+  display: grid;
+  grid-template-columns: minmax(185px, .8fr) minmax(220px, 1.2fr) auto;
+  gap: 9px;
+  align-items: stretch;
+}
+.lead-followup-form input {
+  min-width: 0;
+  height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 12.5px;
+}
+.lead-followup-form input:focus {
+  border-color: var(--accent-blue);
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--accent-blue-soft);
+}
+.lead-followup-form button { min-height: 40px; padding-inline: 14px; }
+.phase2-followup-list { display: grid; gap: 8px; margin-top: 10px; }
+.phase2-followup-list > small { color: var(--text-muted); font-size: 12px; }
+.phase2-followup-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+.phase2-followup-list span,
+.phase2-followup-list small { display: block; }
+.phase2-followup-list small { margin-top: 3px; color: var(--text-muted); }
+.phase2-followup-list button {
+  border: 0;
+  background: transparent;
+  color: var(--accent-blue);
+  font-weight: 700;
+}
+.phase2-followup-list .is-complete { opacity: .65; }
+.phase2-followup-list em { font-size: 11px; color: var(--success); }
+
+@media (max-width: 640px) {
+  .lead-dossier-header,
+  .lead-dossier-body { padding: 18px; }
+  .lead-dossier-summary { grid-template-columns: 1fr; gap: 13px; }
+  .lead-followup-form { grid-template-columns: 1fr; }
+  .lead-followup-form button { width: 100%; }
+}

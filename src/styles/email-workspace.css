@@ -1,0 +1,349 @@
+/* =========================================================================
+   AECS EMAIL AUTOMATION & DRIP CAMPAIGN STYLES
+   ========================================================================= */
+
+.email-workspace-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  color: var(--text-main, #0F172A);
+  min-height: calc(100vh - 80px);
+}
+
+.email-header-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border-subtle, #E2E8F0);
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+.email-tabs-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 2px solid var(--border-subtle, #E2E8F0);
+  padding-bottom: 2px;
+  overflow-x: auto;
+}
+
+.email-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: 10px 10px 0 0;
+  border: none;
+  background: none;
+  color: var(--text-muted, #64748B);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  position: relative;
+}
+
+.email-tab-btn:hover {
+  color: var(--accent-blue, #F97316);
+  background: rgba(249, 115, 22, 0.05);
+}
+
+.email-tab-btn.active {
+  color: var(--accent-blue, #F97316);
+  font-weight: 700;
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.email-tab-btn.active::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent-blue, #F97316);
+  border-radius: 3px 3px 0 0;
+}
+
+/* Metric Cards */
+.email-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.email-metric-card {
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border-subtle, #E2E8F0);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.email-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+.email-engine-status{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}.email-engine-status.ready{background:#dcfce7;color:#15803d}.email-engine-status.attention{background:#fff7ed;color:#c2410c}.email-operations-meta{display:flex;align-items:center;gap:8px;margin-top:10px;color:#64748b;font-size:11px}.email-operations-meta span{display:inline-flex;align-items:center;gap:4px}.email-operations-meta span+span:before{content:"";width:3px;height:3px;border-radius:50%;background:#94a3b8;margin-right:4px}.email-operational-alert{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;color:#b42318}.email-operational-alert>div{display:grid;gap:2px;flex:1}.email-operational-alert strong{font-size:12px}.email-operational-alert span{font-size:11px;color:#7f1d1d}.email-empty-state{min-height:112px;display:grid;place-items:center;align-content:center;gap:5px;padding:20px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;text-align:center;color:#64748b}.email-empty-state strong{font-size:12px;color:#334155}.email-empty-state span{max-width:330px;font-size:11px;line-height:1.45}
+.template-delete-btn{color:#b42318!important}.template-delete-btn:hover{border-color:#fda29b!important;background:#fff1f0!important}.template-library-empty{grid-column:1/-1;min-height:280px}.email-modal-backdrop{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:#07162eb8;backdrop-filter:blur(5px)}.custom-template-modal{width:min(720px,100%);max-height:92vh;overflow:auto;border:1px solid #dbe3ee;border-radius:16px;background:#fff;box-shadow:0 24px 70px #07162e4d}.custom-template-modal header,.custom-template-modal footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px}.custom-template-modal header{border-bottom:1px solid #e5eaf1}.custom-template-modal footer{justify-content:flex-end;border-top:1px solid #e5eaf1}.custom-template-modal header>div{display:grid;gap:4px}.custom-template-modal header strong{font-size:16px;color:#0b1e3b}.custom-template-modal header span{font-size:11px;color:#64748b}.custom-template-modal header>button{border:0;background:transparent;color:#64748b}.custom-template-form{display:grid;grid-template-columns:1fr 220px;gap:16px;padding:22px}.custom-template-form label{display:grid;gap:7px;color:#344054;font-size:12px;font-weight:700}.custom-template-form .full{grid-column:1/-1}.custom-template-form input,.custom-template-form select,.custom-template-form textarea{width:100%;border:1px solid #cfd8e5;border-radius:8px;background:#fff;padding:10px 11px;color:#101828;font:inherit;font-weight:400;outline:0}.custom-template-form input:focus,.custom-template-form select:focus,.custom-template-form textarea:focus{border-color:#f97316;box-shadow:0 0 0 3px #f973161f}.custom-template-form textarea{resize:vertical;line-height:1.55;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}@media(max-width:620px){.custom-template-form{grid-template-columns:1fr}.custom-template-form .full{grid-column:auto}}
+
+.email-metric-card.metric-box {
+  display: block;
+  min-width: 0;
+}
+
+.metric-signal.positive {
+  color: var(--success-text, #047857);
+  font-weight: 700;
+}
+
+/* Automation Workflow Rules Grid */
+.automations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 18px;
+}
+
+.automation-rule-card {
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border-subtle, #E2E8F0);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.automation-rule-card.active {
+  border-color: rgba(249, 115, 22, 0.4);
+  box-shadow: 0 4px 15px rgba(249, 115, 22, 0.05);
+}
+
+.automation-rule-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 100%;
+  background: var(--rule-color, #F97316);
+}
+
+/* Templates Grid */
+.templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+}
+
+.email-template-card {
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border-subtle, #E2E8F0);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.email-template-card:hover {
+  border-color: var(--accent-blue, #F97316);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+.template-card-header {
+  padding: 16px 20px;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.template-card-body {
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.template-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.25);
+  letter-spacing: 0.5px;
+}
+
+/* Merge Tag Pills */
+.merge-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-family: monospace;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  border-radius: 6px;
+  color: var(--accent-blue, #F97316);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.merge-tag-pill:hover {
+  background: var(--accent-blue, #F97316);
+  color: #FFFFFF;
+}
+
+/* Logs Table */
+.email-table-container {
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border-subtle, #E2E8F0);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.email-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.email-table th {
+  background: var(--bg-app, #F8FAFC);
+  padding: 12px 18px;
+  font-weight: 600;
+  color: var(--text-muted, #64748B);
+  border-bottom: 1px solid var(--border-subtle, #E2E8F0);
+}
+
+.email-table td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle, #E2E8F0);
+}
+
+.email-table tr:last-child td {
+  border-bottom: none;
+}
+
+.email-table tr:hover td {
+  background: rgba(249, 115, 22, 0.02);
+}
+
+/* Status Badges */
+.email-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.email-status-badge.delivered {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.email-status-badge.opened {
+  background: #DBEAFE;
+  color: #EA580C;
+}
+
+.email-status-badge.clicked {
+  background: #F3E8FF;
+  color: #7E22CE;
+}
+
+.email-status-badge.bounced {
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+.email-status-badge.queued {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+/* Live Preview Frame */
+.email-preview-frame {
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1E293B;
+  line-height: 1.6;
+}
+
+/* Switch Toggle */
+.automation-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.automation-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.automation-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #CBD5E1;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.automation-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .automation-slider {
+  background-color: #10B981;
+}
+
+input:checked + .automation-slider:before {
+  transform: translateX(20px);
+}

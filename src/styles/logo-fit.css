@@ -1,0 +1,39 @@
+.login-logo-frame,
+.public-logo-frame,
+.brand-logo-frame{
+  display:block;
+  flex:0 0 auto;
+  overflow:hidden;
+  border-radius:50%!important;
+  background:#fff;
+}
+
+.login-logo-frame{
+  width:96px;
+  height:96px;
+  margin:0 auto 12px;
+  border:1px solid #edf0f5;
+}
+
+.login-logo-frame img,
+.public-logo-frame img,
+.brand-logo-frame img{
+  display:block;
+  width:100%;
+  height:100%;
+  max-width:none;
+  object-fit:contain;
+  object-position:center;
+  transform:scale(1.09)!important;
+  transform-origin:center;
+}
+
+.public-registration-card .public-brand>.public-logo-frame{
+  border-radius:50%!important;
+  background:#fff!important;
+  border:1px solid #edf0f5!important;
+}
+
+@media(max-width:620px){
+  .login-logo-frame{width:86px;height:86px}
+}

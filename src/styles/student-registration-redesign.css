@@ -1,0 +1,237 @@
+.student-registration-page {
+  width: min(1180px, calc(100% - 40px));
+  max-width: 1180px;
+  margin-inline: auto;
+  padding-bottom: 48px;
+}
+
+.student-registration-page .page-header-row {
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.student-registration-page .page-header-titles h2 {
+  margin: 5px 0 6px;
+  font-size: clamp(26px, 3vw, 34px);
+  letter-spacing: -.035em;
+}
+
+.student-registration-page .page-header-titles p {
+  max-width: 680px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.student-registration-progress {
+  margin-bottom: 22px;
+  padding: 20px 22px;
+  overflow: hidden;
+}
+
+.student-registration-progress-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.student-registration-progress-heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.student-registration-progress-heading span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.student-registration-progress-heading strong {
+  color: var(--text-main);
+  font-size: 15px;
+}
+
+.student-registration-progress-heading b {
+  color: var(--brand-orange, #f97316);
+  font-size: 16px;
+}
+
+.student-registration-progress-bar {
+  height: 5px;
+  margin-bottom: 18px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9eef5;
+}
+
+.student-registration-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f97316, #fb923c);
+  transition: width .25s ease;
+}
+
+.student-registration-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(140px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.student-registration-step {
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  text-align: left;
+}
+
+.student-registration-step:disabled { cursor: default; opacity: 1; }
+.student-registration-step.is-done { cursor: pointer; }
+.student-registration-step.is-active {
+  border-color: #fdba74;
+  background: #fff7ed;
+  box-shadow: 0 0 0 2px rgba(249,115,22,.08);
+}
+
+.student-registration-step-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #e8eef7;
+  color: #0b1e3b;
+}
+
+.student-registration-step.is-active .student-registration-step-icon {
+  background: #f97316;
+  color: #fff;
+}
+
+.student-registration-step.is-done .student-registration-step-icon {
+  background: #dcfce7;
+  color: #047857;
+}
+
+.student-registration-step div:last-child { min-width: 0; }
+.student-registration-step span {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.student-registration-step strong {
+  display: block;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-registration-card {
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 12px 34px rgba(15, 23, 42, .06);
+}
+
+.student-registration-card-header {
+  min-height: 96px;
+  padding: 20px 26px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #0b1e3b, #15345f);
+  color: #fff;
+}
+
+.student-registration-card-header h3 {
+  margin: 4px 0;
+  color: #fff;
+  font-size: 21px;
+}
+
+.student-registration-card-header p { color: #bfd0e8; }
+.student-registration-section-label {
+  color: #fb923c;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.student-registration-current-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 12px;
+  background: rgba(255,255,255,.09);
+  color: #fb923c;
+}
+
+.student-registration-fields {
+  padding: 28px 30px 32px;
+}
+
+.student-registration-fields .form-row-2 {
+  gap: 22px;
+}
+
+.student-registration-fields .form-group {
+  gap: 7px;
+}
+
+.student-registration-fields .form-group label {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.student-registration-fields input,
+.student-registration-fields select,
+.student-registration-fields textarea {
+  min-height: 44px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.student-registration-fields textarea { min-height: 104px; }
+
+.student-registration-footer {
+  justify-content: space-between;
+  padding: 18px 28px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.student-registration-footer .btn-primary,
+.student-registration-footer .btn-secondary {
+  min-width: 108px;
+  min-height: 42px;
+  justify-content: center;
+}
+
+@media (max-width: 760px) {
+  .student-registration-page { width: calc(100% - 24px); }
+  .student-registration-page .page-header-row { gap: 16px; }
+  .student-registration-progress { padding: 16px; }
+  .student-registration-fields { padding: 20px 16px 24px; }
+  .student-registration-card-header { padding: 18px; }
+  .student-registration-current-icon { display: none; }
+  .student-registration-footer { padding: 14px 16px; }
+}
