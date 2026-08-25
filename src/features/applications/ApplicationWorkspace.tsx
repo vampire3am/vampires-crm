@@ -101,6 +101,7 @@ export function ApplicationWorkspace() {
   const [savingApplication, setSavingApplication] = useState(false);
   const [applicationFormError, setApplicationFormError] = useState("");
   const [applicationFormStep, setApplicationFormStep] = useState<1 | 2 | 3>(1);
+  const [applicationReviewConfirmed, setApplicationReviewConfirmed] = useState(false);
   const [activeDossier, setActiveDossier] = useState<UniversityApplication | null>(null);
   const [stageChangeApp, setStageChangeApp] = useState<UniversityApplication | null>(null);
   const [dossierDocuments, setDossierDocuments] = useState<DocumentRecord[]>([]);
@@ -137,6 +138,7 @@ export function ApplicationWorkspace() {
       tuitionFee: "", scholarship: "", notes: "",
     });
     setApplicationFormStep(1);
+    setApplicationReviewConfirmed(false);
     setEditingApplicationId(null);
     setApplicationFormError("");
     setUseUnlistedUniversity(false);
@@ -400,6 +402,7 @@ export function ApplicationWorkspace() {
   // Submit Handler
   const handleSubmitNewApplication = async (e: React.FormEvent) => {
     e.preventDefault();
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
     if (applicationFormStep === 1) {
       if (!newAppForm.studentCode) {
         notifyError("Select a student", "Choose a registered student before continuing to the study plan.");
@@ -414,7 +417,12 @@ export function ApplicationWorkspace() {
         notifyError("Complete the study plan", "Select the country, university, study level, course, and intake before continuing.");
         return;
       }
+      setApplicationReviewConfirmed(false);
       setApplicationFormStep(3);
+      return;
+    }
+    if (submitter?.dataset.applicationSubmit !== "true" || !applicationReviewConfirmed) {
+      notifyError("Review confirmation required", "Review the final application details and tick the confirmation box before submitting.");
       return;
     }
     if (!newAppForm.studentName.trim() || !newAppForm.universityName.trim()) {
@@ -1153,6 +1161,10 @@ export function ApplicationWorkspace() {
                       placeholder="Include portal credentials, pending documents, or condition remarks…"
                     />
                   </div>
+                  <label className="application-review-confirmation">
+                    <input type="checkbox" checked={applicationReviewConfirmed} onChange={event => setApplicationReviewConfirmed(event.target.checked)} />
+                    <span><strong>I have reviewed this application</strong><small>Confirm the student, study plan, financial details and application stage are correct.</small></span>
+                  </label>
                   </section>}
                 </div>
 
@@ -1170,14 +1182,15 @@ export function ApplicationWorkspace() {
                     type="button"
                     className="btn-primary"
                     disabled={applicationFormStep === 1 ? !newAppForm.studentCode : !newAppForm.country || !newAppForm.universityName.trim() || !newAppForm.studyLevel || !newAppForm.course.trim() || !newAppForm.intake}
-                    onClick={() => setApplicationFormStep((applicationFormStep + 1) as 2 | 3)}
+                    onClick={() => { setApplicationReviewConfirmed(false); setApplicationFormStep((applicationFormStep + 1) as 2 | 3); }}
                   >
                     <span>Continue</span><ChevronRight size={15}/>
                   </button> : <button
                     type="submit"
+                    data-application-submit="true"
                     className="btn-primary"
                     style={{ background: "#F97316", borderColor: "#F97316" }}
-                    disabled={savingApplication}
+                    disabled={savingApplication || !applicationReviewConfirmed}
                   >
                     <PlaneTakeoff size={15} />
                     <span>{savingApplication ? "Saving…" : editingApplicationId ? "Save Application" : "Submit Application"}</span>
