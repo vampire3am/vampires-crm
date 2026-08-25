@@ -41,6 +41,7 @@ import { ScreenBreakReminder } from "../wellness/ScreenBreakReminder";
 import { GlobalMessageNotifier } from "../common/GlobalMessageNotifier";
 import { IncomingCallToast } from "../calling/IncomingCallToast";
 import { MessagingService } from "../../services/messagingService";
+import { NotificationService, type StaffNotification } from "../../services/notificationService";
 
 const SEARCH_ITEMS = [
   { label: "Dashboard Overview", detail: "Kathmandu Hub operations snapshot", to: "/dashboard", icon: LayoutDashboard },
@@ -71,12 +72,22 @@ export function AppShell() {
   const [dark, setDark] = useState(() => localStorage.getItem("abroad-theme") === "dark");
   const [hrmsOpen, setHrmsOpen] = useState(false);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [notifications, setNotifications] = useState<StaffNotification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
 
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, permissions, signOut } = useAuth();
   const currentStaffId = profile?.id ?? "pending-session";
+  const unreadNotifications=notifications.filter(item=>!item.readAt).length;
+
+  const loadNotifications=async()=>{if(!profile?.id)return;setNotificationsLoading(true);try{setNotifications(await NotificationService.list())}catch{setNotifications([])}finally{setNotificationsLoading(false)}};
+  useEffect(()=>{if(!profile?.id)return;void loadNotifications();return NotificationService.subscribe(profile.id,()=>void loadNotifications())},[profile?.id]);
+  const openNotification=async(item:StaffNotification)=>{if(!item.readAt){await NotificationService.markRead(item.id);setNotifications(current=>current.map(entry=>entry.id===item.id?{...entry,readAt:new Date().toISOString()}:entry))}setNotificationsOpen(false);if(item.actionUrl)navigate(item.actionUrl)};
+  const markAllNotificationsRead=async()=>{await NotificationService.markAllRead();const now=new Date().toISOString();setNotifications(current=>current.map(item=>({...item,readAt:item.readAt??now})))};
+  const notificationIcon=(type:string)=>type==="MESSAGE"?<MessageSquare size={16}/>:type.includes("TASK")?<FileCheck2 size={16}/>:type.includes("LEAVE")?<Calendar size={16}/>:<Bell size={16}/>;
+  const notificationTime=(value:string)=>{const seconds=Math.floor((Date.now()-new Date(value).getTime())/1000);if(seconds<60)return"Just now";if(seconds<3600)return`${Math.floor(seconds/60)}m ago`;if(seconds<86400)return`${Math.floor(seconds/3600)}h ago`;return new Date(value).toLocaleDateString([], {month:"short",day:"numeric"})};
 
   useEffect(() => {
     let active = true;
@@ -544,43 +555,25 @@ export function AppShell() {
                 onClick={() => {
                   setNotificationsOpen(v => !v);
                   setProfileOpen(false);
+                  if(!notificationsOpen)void loadNotifications();
                 }}
                 aria-label="System Notifications"
               >
                 <Bell size={17} />
-                <span className="badge-dot" />
+                {unreadNotifications>0&&<span className="notification-count-badge">{unreadNotifications>99?"99+":unreadNotifications}</span>}
               </button>
 
               {notificationsOpen && (
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    top: "44px",
-                    width: "300px",
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: "var(--radius-md)",
-                    boxShadow: "var(--shadow-md)",
-                    padding: "14px",
-                    zIndex: 100,
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                    <strong style={{ fontSize: "13px" }}>Notifications</strong>
-                    <span style={{ fontSize: "11px", color: "var(--accent-blue)", cursor: "pointer" }}>Mark all read</span>
+                <section className="notification-popover" aria-label="Notification center">
+                  <header><div><span className="page-category-eyebrow">Activity center</span><strong>Notifications</strong><small>{unreadNotifications?`${unreadNotifications} unread updates`:"You're all caught up"}</small></div>{unreadNotifications>0&&<button type="button" onClick={()=>void markAllNotificationsRead()}>Mark all read</button>}</header>
+                  <div className="notification-filters"><span className="active">All activity</span><span>Messages</span><span>Tasks & reminders</span></div>
+                  <div className="notification-list">
+                    {notificationsLoading&&!notifications.length&&<div className="notification-empty">Loading activity…</div>}
+                    {!notificationsLoading&&!notifications.length&&<div className="notification-empty"><Bell size={24}/><strong>No notifications yet</strong><span>Messages, assignments, reminders and approvals will appear here.</span></div>}
+                    {notifications.map(item=><button type="button" key={item.id} className={`notification-item ${item.readAt?"":"is-unread"}`} onClick={()=>void openNotification(item)}><span className={`notification-type-icon type-${item.type.toLowerCase()}`}>{notificationIcon(item.type)}</span><span className="notification-copy"><strong>{item.title}</strong><span>{item.body}</span><small>{notificationTime(item.createdAt)}</small></span>{!item.readAt&&<i/>}</button>)}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }}>
-                    <div style={{ padding: "8px", background: "var(--bg-card-subtle)", borderRadius: "4px" }}>
-                      <strong>Visa Granted: Riya Sharma</strong>
-                      <p style={{ margin: "2px 0 0 0", color: "var(--text-muted)", fontSize: "11px" }}>UK Visa approved by Home Office</p>
-                    </div>
-                    <div style={{ padding: "8px", background: "var(--bg-card-subtle)", borderRadius: "4px" }}>
-                      <strong>eSewa Payment: ₨ 25,000</strong>
-                      <p style={{ margin: "2px 0 0 0", color: "var(--text-muted)", fontSize: "11px" }}>Posted to Ledger 4112</p>
-                    </div>
-                  </div>
-                </div>
+                  <footer><span>Live CRM activity · updates automatically</span></footer>
+                </section>
               )}
             </div>
 
