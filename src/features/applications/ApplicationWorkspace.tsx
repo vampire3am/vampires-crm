@@ -22,12 +22,13 @@ type ApplicationUniversity = {
   country: string;
   countryCode: string;
   popularCourses?: string[];
-  courses?: { name: string; status?: "ACTIVE" | "INACTIVE" }[];
+  courses?: { name: string; qualification?: string; intakes?: string; status?: "ACTIVE" | "INACTIVE" }[];
   tuition?: string;
   intake?: string;
 };
 const APPLICATION_DESTINATIONS_KEY = "aecs_destinations_catalog_v2";
 const APPLICATION_UNIVERSITIES_KEY = "aecs_partner_universities_v2";
+const STUDY_LEVELS = ["+2 / Diploma", "Foundation / Pathway", "Certificate", "Bachelor's Degree", "Graduate Certificate", "Postgraduate Diploma", "Master's Degree", "PhD / Doctorate"];
 
 const normalizeCountryCode = (value?: string) => {
   const code = (value || "").trim().toUpperCase();
@@ -113,6 +114,7 @@ export function ApplicationWorkspace() {
     universityName: "",
     country: "" as UniversityApplication["country"],
     countryCode: "" as UniversityApplication["countryCode"],
+    studyLevel: "",
     course: "",
     intake: "",
     stage: "SUBMITTED" as ApplicationStage,
@@ -131,7 +133,7 @@ export function ApplicationWorkspace() {
   const resetApplicationForm = () => {
     setNewAppForm({
       studentCode: "", studentName: "", universityName: "", country: "", countryCode: "",
-      course: "", intake: "", stage: "SUBMITTED", deadline: "", officer: profile?.full_name || "",
+      studyLevel: "", course: "", intake: "", stage: "SUBMITTED", deadline: "", officer: profile?.full_name || "",
       tuitionFee: "", scholarship: "", notes: "",
     });
     setApplicationFormStep(1);
@@ -168,6 +170,7 @@ export function ApplicationWorkspace() {
       universityName: application.universityName,
       country: application.country,
       countryCode: application.countryCode,
+      studyLevel: application.studyLevel === "Not specified" ? "" : application.studyLevel,
       course: application.course,
       intake: application.intake,
       stage: application.stage,
@@ -296,10 +299,26 @@ export function ApplicationWorkspace() {
     const selectedUniversity = universitiesForCountry.find(university => university.name === newAppForm.universityName);
     const source = selectedUniversity ? [selectedUniversity] : universitiesForCountry;
     return Array.from(new Set(source.flatMap(university => {
-      const activeCourses = university.courses?.filter(course => course.status !== "INACTIVE").map(course => course.name).filter(Boolean) ?? [];
+      const activeCourses = university.courses?.filter(course => {
+        if (course.status === "INACTIVE") return false;
+        if (!newAppForm.studyLevel || !course.qualification || course.qualification === "Not specified") return true;
+        if (newAppForm.studyLevel === "+2 / Diploma") return course.qualification === "Diploma" || course.qualification === "+2 / Diploma";
+        return course.qualification === newAppForm.studyLevel;
+      }).map(course => course.name).filter(Boolean) ?? [];
       return activeCourses.length ? activeCourses : university.popularCourses || [];
     }).filter(Boolean))).sort();
-  }, [newAppForm.universityName, universitiesForCountry]);
+  }, [newAppForm.studyLevel, newAppForm.universityName, universitiesForCountry]);
+
+  const intakeOptions = useMemo(() => {
+    const destination = catalogDestinations.find(item => item.name === newAppForm.country);
+    const university = universitiesForCountry.find(item => item.name === newAppForm.universityName);
+    const course = university?.courses?.find(item => item.name === newAppForm.course);
+    const values = [course?.intakes, university?.intake, ...(destination?.intakeCycles || []), ...(destination?.popularIntakes || [])]
+      .flatMap(value => (value || "").split(","))
+      .map(value => value.trim().replace(/\b(20\d{2})\s+\1\b/, "$1"))
+      .filter(Boolean);
+    return Array.from(new Set(values.length ? values : ["September 2026", "January 2027", "Spring 2027", "July 2027", "September 2027"]));
+  }, [catalogDestinations, newAppForm.country, newAppForm.course, newAppForm.universityName, universitiesForCountry]);
 
   const selectedApplicationStudent = students.find(student => student.code === newAppForm.studentCode);
 
@@ -310,8 +329,9 @@ export function ApplicationWorkspace() {
       country: countryName,
       countryCode: destination?.code || "",
       universityName: "",
+      studyLevel: "",
       course: "",
-      intake: (destination?.intakeCycles?.[0] || destination?.popularIntakes?.[0] || "").replace(/\b(20\d{2})\s+\1\b/, "$1"),
+      intake: "",
     }));
     setUseUnlistedUniversity(false);
     setUseUnlistedCourse(false);
@@ -319,13 +339,13 @@ export function ApplicationWorkspace() {
 
   const selectUniversity = (universityName: string) => {
     const university = universitiesForCountry.find(item => item.name === universityName);
-    const firstActiveCourse = university?.courses?.find(course => course.status !== "INACTIVE")?.name;
     setNewAppForm(current => ({
       ...current,
       universityName,
-      course: firstActiveCourse || university?.popularCourses?.[0] || "",
+      studyLevel: "",
+      course: "",
       tuitionFee: university?.tuition || current.tuitionFee,
-      intake: university?.intake || current.intake,
+      intake: "",
     }));
   };
 
@@ -403,6 +423,7 @@ export function ApplicationWorkspace() {
       universityName: newAppForm.universityName.trim(),
       country: newAppForm.country,
       countryCode: cCode,
+      studyLevel: newAppForm.studyLevel,
       course: newAppForm.course.trim(),
       intake: newAppForm.intake,
       stage: newAppForm.stage,
@@ -1006,6 +1027,12 @@ export function ApplicationWorkspace() {
 
                   {applicationFormStep === 2 && <section className="application-form-section application-wizard-page">
                     <header><span>2</span><div><strong>Study plan</strong><small>Options are connected to the active Abroad catalogue.</small></div></header>
+                  <div className="application-study-flow" aria-label="Study plan selection order">
+                    {["Country", "University", "Level", "Course", "Intake"].map((label,index) => {
+                      const complete=[newAppForm.country,newAppForm.universityName,newAppForm.studyLevel,newAppForm.course,newAppForm.intake][index];
+                      return <span key={label} className={complete ? "complete" : ""}><b>{complete ? <Check size={11}/> : index+1}</b>{label}</span>;
+                    })}
+                  </div>
                   <div className="form-row-2">
                     <div className="form-group">
                       <label>Destination Country *</label>
@@ -1016,33 +1043,29 @@ export function ApplicationWorkspace() {
                     </div>
                     <div className="form-group">
                       <label>Target University *</label>
-                      {useUnlistedUniversity ? <input required value={newAppForm.universityName} onChange={event => setNewAppForm(current => ({ ...current, universityName: event.target.value, course: "" }))} placeholder="Enter the official university name" autoFocus /> : <CatalogCombobox value={newAppForm.universityName} options={universitiesForCountry.map(university => university.name)} disabled={!newAppForm.country} placeholder={newAppForm.country ? "Select a university" : "Select a destination first"} emptyText={`No universities are registered for ${newAppForm.country || "this destination"}.`} onChange={selectUniversity} />}
-                      <div className="catalog-field-footer"><small>{useUnlistedUniversity ? "This existing application uses an unlisted university." : `Only universities registered under ${newAppForm.country || "the selected destination"} are shown.`}</small>{editingApplicationId && newAppForm.country && <button type="button" onClick={() => { setUseUnlistedUniversity(current => !current); setNewAppForm(form => ({ ...form, universityName: "", course: "" })); }}>{useUnlistedUniversity ? "Use catalogue" : "Keep unlisted"}</button>}</div>
+                      {useUnlistedUniversity ? <input required value={newAppForm.universityName} onChange={event => setNewAppForm(current => ({ ...current, universityName: event.target.value, studyLevel: "", course: "", intake: "" }))} placeholder="Enter the official university name" autoFocus /> : <CatalogCombobox value={newAppForm.universityName} options={universitiesForCountry.map(university => university.name)} disabled={!newAppForm.country} placeholder={newAppForm.country ? "Select a university" : "Select a destination first"} emptyText={`No universities are registered for ${newAppForm.country || "this destination"}.`} onChange={selectUniversity} />}
+                      <div className="catalog-field-footer"><small>{useUnlistedUniversity ? "This existing application uses an unlisted university." : `Only universities registered under ${newAppForm.country || "the selected destination"} are shown.`}</small>{editingApplicationId && newAppForm.country && <button type="button" onClick={() => { setUseUnlistedUniversity(current => !current); setNewAppForm(form => ({ ...form, universityName: "", studyLevel: "", course: "", intake: "" })); }}>{useUnlistedUniversity ? "Use catalogue" : "Keep unlisted"}</button>}</div>
                     </div>
                   </div>
 
                   <div className="form-row-2">
                     <div className="form-group">
-                      <label>Degree / Course *</label>
-                      {useUnlistedCourse ? <input required value={newAppForm.course} onChange={event => setNewAppForm(current => ({ ...current, course: event.target.value }))} placeholder="Enter the official degree or course" autoFocus /> : <CatalogCombobox value={newAppForm.course} options={coursesForSelection} disabled={!newAppForm.universityName} placeholder={newAppForm.universityName ? "Select a degree or course" : "Select a university first"} emptyText="No courses are registered for this university." onChange={course => setNewAppForm(current => ({ ...current, course }))} />}
-                      <div className="catalog-field-footer"><small>{useUnlistedCourse ? "This existing application uses an unlisted course." : "Only active courses configured for the selected university are shown."}</small>{editingApplicationId && newAppForm.universityName && <button type="button" onClick={() => { setUseUnlistedCourse(current => !current); setNewAppForm(form => ({ ...form, course: "" })); }}>{useUnlistedCourse ? "Use catalogue" : "Keep unlisted"}</button>}</div>
+                      <label>Study Level *</label>
+                      <CatalogCombobox value={newAppForm.studyLevel} options={STUDY_LEVELS} disabled={!newAppForm.universityName} placeholder={newAppForm.universityName ? "Select study level" : "Select a university first"} emptyText="No study levels are configured." onChange={studyLevel => setNewAppForm(current => ({ ...current, studyLevel, course: "", intake: "" }))}/>
+                      <span className="application-field-hint">Includes +2 / Diploma and all qualification levels used in the university catalogue.</span>
                     </div>
 
                     <div className="form-group">
-                      <label>Intake Cycle *</label>
-                      <select
-                        value={newAppForm.intake}
-                        onChange={e => setNewAppForm({ ...newAppForm, intake: e.target.value })}
-                      >
-                        {newAppForm.intake && !["September 2026","July 2026","Fall 2026","Winter 2026","January 2027","Spring 2027"].includes(newAppForm.intake) && <option value={newAppForm.intake}>{newAppForm.intake}</option>}
-                        <option value="September 2026">September 2026</option>
-                        <option value="July 2026">July 2026</option>
-                        <option value="Fall 2026">Fall 2026</option>
-                        <option value="Winter 2026">Winter 2026</option>
-                        <option value="January 2027">January 2027</option>
-                        <option value="Spring 2027">Spring 2027</option>
-                      </select>
+                      <label>Degree / Course *</label>
+                      {useUnlistedCourse ? <input required value={newAppForm.course} onChange={event => setNewAppForm(current => ({ ...current, course: event.target.value, intake: "" }))} placeholder="Enter the official degree or course" autoFocus /> : <CatalogCombobox value={newAppForm.course} options={coursesForSelection} disabled={!newAppForm.studyLevel} placeholder={newAppForm.studyLevel ? "Select a degree or course" : "Select a study level first"} emptyText="No courses match this study level." onChange={course => setNewAppForm(current => ({ ...current, course, intake: "" }))} />}
+                      <div className="catalog-field-footer"><small>{useUnlistedCourse ? "This existing application uses an unlisted course." : "Courses are filtered by the selected university and study level."}</small>{editingApplicationId && newAppForm.universityName && <button type="button" onClick={() => { setUseUnlistedCourse(current => !current); setNewAppForm(form => ({ ...form, course: "", intake: "" })); }}>{useUnlistedCourse ? "Use catalogue" : "Keep unlisted"}</button>}</div>
                     </div>
+                  </div>
+
+                  <div className="form-group application-intake-field">
+                    <label>Intake Cycle *</label>
+                    <CatalogCombobox value={newAppForm.intake} options={intakeOptions} disabled={!newAppForm.course} placeholder={newAppForm.course ? "Select an available intake" : "Select a course first"} emptyText="No intake is configured for this course. Add it in the university catalogue." onChange={intake => setNewAppForm(current => ({ ...current, intake }))}/>
+                    <span className="application-field-hint">Available intakes are synced from the course, university and destination catalogue.</span>
                   </div>
                   </section>}
 
@@ -1129,7 +1152,7 @@ export function ApplicationWorkspace() {
                   {applicationFormStep < 3 ? <button
                     type="button"
                     className="btn-primary"
-                    disabled={applicationFormStep === 1 ? !newAppForm.studentCode : !newAppForm.country || !newAppForm.universityName.trim() || !newAppForm.course.trim() || !newAppForm.intake}
+                    disabled={applicationFormStep === 1 ? !newAppForm.studentCode : !newAppForm.country || !newAppForm.universityName.trim() || !newAppForm.studyLevel || !newAppForm.course.trim() || !newAppForm.intake}
                     onClick={() => setApplicationFormStep((applicationFormStep + 1) as 2 | 3)}
                   >
                     <span>Continue</span><ChevronRight size={15}/>
