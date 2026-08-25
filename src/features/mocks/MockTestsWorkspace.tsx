@@ -53,6 +53,8 @@ export function MockTestsWorkspace() {
 
   // Score Entry Form
   const [scoreForm, setScoreForm] = useState({
+    bookingId: "",
+    slotId: "",
     candidateType: "INTERNAL" as "INTERNAL"|"EXTERNAL",
     studentName: "",
     studentCode: "",
@@ -125,6 +127,8 @@ export function MockTestsWorkspace() {
     if ((scoreForm.candidateType==="INTERNAL"&&!scoreForm.studentCode)||(scoreForm.candidateType==="EXTERNAL"&&!scoreForm.studentName.trim()) || !scoreForm.testDate || !scoreForm.overallScore.trim() || !scoreForm.examiner.trim() || !scoreForm.venue.trim() || !scoreForm.examinerFeedback.trim() || !scoreForm.listening || !scoreForm.reading || !scoreForm.writing || !scoreForm.speaking) { setFormError("Select or enter a candidate and complete all required evaluation fields."); return; }
     setSaving(true); setFormError("");
     try { const resultPayload={
+      bookingId:scoreForm.bookingId||undefined,
+      slotId:scoreForm.slotId||undefined,
       candidateType: scoreForm.candidateType,
       studentName: scoreForm.studentName.trim(),
       studentCode: scoreForm.studentCode.trim(),
@@ -146,6 +150,7 @@ export function MockTestsWorkspace() {
     await loadData();
     setShowAddResultModal(false); setEditingResultId(null); setSuccessMessage(editingResultId?"Mock-test evaluation updated successfully.":"Mock-test evaluation recorded successfully.");
     setScoreForm({
+      bookingId:"",slotId:"",
       candidateType:"INTERNAL",
       studentName: "",
       studentCode: "",
@@ -169,8 +174,9 @@ export function MockTestsWorkspace() {
   const handleBookCandidate=async(event:React.FormEvent)=>{event.preventDefault();if(!bookingSlot||(bookingCandidateType==="INTERNAL"&&!bookingStudentId)||(bookingCandidateType==="EXTERNAL"&&!bookingExternal.name.trim())){setFormError("Select an internal student or enter the external candidate name.");return}setSaving(true);setFormError("");try{await MockTestService.bookCandidate(bookingSlot.id,{type:bookingCandidateType,classStudentId:bookingStudentId,name:bookingExternal.name.trim(),phone:bookingExternal.phone.trim(),email:bookingExternal.email.trim()});await loadData();setBookingSlot(null);setBookingStudentId("");setBookingExternal({name:"",phone:"",email:""});setSuccessMessage("Candidate staged in the mock-test session successfully.")}catch(error){setFormError(error instanceof Error?error.message:"Unable to book candidate")}finally{setSaving(false)}};
   const updateSlotStatus=async(status:MockTestSlot["status"])=>{if(!activeSlotDetail)return;setSaving(true);try{await MockTestService.updateSlotStatus(activeSlotDetail.id,status);setSlots(current=>current.map(slot=>slot.id===activeSlotDetail.id?{...slot,status}:slot));setActiveSlotDetail(current=>current?{...current,status}:current);setSuccessMessage(`Mock-test session marked as ${status.toLowerCase()}.`)}catch(error){setFormError(error instanceof Error?error.message:"Unable to update mock-test status")}finally{setSaving(false)}};
 
-  const openNewResult=()=>{setEditingResultId(null);setFormError("");setShowAddResultModal(true)};
-  const openEditResult=(result:MockTestResult)=>{setEditingResultId(result.id);setActiveResultDetail(null);setFormError("");setScoreForm({candidateType:result.candidateType,studentName:result.studentName,studentCode:result.studentCode==="External walk-in"?"":result.studentCode,phone:result.phone??"",email:result.email??"",testType:result.testType,testDate:result.testDate,venue:result.venue,examiner:result.examiner,listening:String(result.listening),reading:String(result.reading),writing:String(result.writing),speaking:String(result.speaking),overallScore:result.overallScore,status:result.status,examinerFeedback:result.examinerFeedback,targetAchieved:result.targetAchieved});setShowAddResultModal(true)};
+  const openNewResult=()=>{setEditingResultId(null);setFormError("");setScoreForm({bookingId:"",slotId:"",candidateType:"INTERNAL",studentName:"",studentCode:"",phone:"",email:"",testType:"IELTS Academic",testDate:new Date().toISOString().split("T")[0],venue:"",examiner:"",listening:"",reading:"",writing:"",speaking:"",overallScore:"",status:"Score Issued",examinerFeedback:"",targetAchieved:false});setShowAddResultModal(true)};
+  const openEditResult=(result:MockTestResult)=>{setEditingResultId(result.id);setActiveResultDetail(null);setFormError("");setScoreForm({bookingId:result.bookingId??"",slotId:result.slotId??"",candidateType:result.candidateType,studentName:result.studentName,studentCode:result.studentCode==="External walk-in"?"":result.studentCode,phone:result.phone??"",email:result.email??"",testType:result.testType,testDate:result.testDate,venue:result.venue,examiner:result.examiner,listening:String(result.listening),reading:String(result.reading),writing:String(result.writing),speaking:String(result.speaking),overallScore:result.overallScore,status:result.status,examinerFeedback:result.examinerFeedback,targetAchieved:result.targetAchieved});setShowAddResultModal(true)};
+  const openScheduledScore=(slot:MockTestSlot,candidate:MockTestSlot["candidates"][number])=>{const existing=results.find(result=>result.bookingId===candidate.id);setActiveSlotDetail(null);if(existing){openEditResult(existing);return}setEditingResultId(null);setFormError("");setScoreForm({bookingId:candidate.id,slotId:slot.id,candidateType:candidate.candidateType,studentName:candidate.name,studentCode:candidate.candidateType==="INTERNAL"?candidate.studentCode:"",phone:candidate.phone,email:candidate.email,testType:slot.testType,testDate:slot.date,venue:slot.room,examiner:slot.invigilator,listening:"",reading:"",writing:"",speaking:"",overallScore:"",status:"Score Issued",examinerFeedback:"",targetAchieved:false});setShowAddResultModal(true)};
 
   // Handle Slot Submit
   const handleSaveSlot = async (e: React.FormEvent) => {
@@ -207,6 +213,8 @@ export function MockTestsWorkspace() {
   const averageScore = totalMocks ? (results.reduce((sum, result) => sum + (Number.parseFloat(result.overallScore) || 0), 0) / totalMocks).toFixed(1) : "—";
   const diagnosticCandidates=useMemo(()=>{const grouped=new Map<string,{key:string;name:string;code:string;attempts:MockTestResult[]}>();for(const result of results){const key=result.candidateType==="INTERNAL"?result.studentCode:`external:${result.studentName.toLowerCase()}:${result.email??result.phone??""}`;const entry=grouped.get(key)??{key,name:result.studentName,code:result.studentCode,attempts:[]};entry.attempts.push(result);grouped.set(key,entry)}return Array.from(grouped.values()).map(entry=>{const attempts=entry.attempts.sort((a,b)=>b.testDate.localeCompare(a.testDate)||b.testCode.localeCompare(a.testCode));return{...entry,attempts,latest:attempts[0]}})},[results]);
   const activeDiagnostic=diagnosticCandidates.find(candidate=>candidate.key===activeDiagnosticKey)??null;
+  const enteredSectionScores=[scoreForm.listening,scoreForm.reading,scoreForm.writing,scoreForm.speaking].filter(value=>value.trim()!=="").map(Number).filter(Number.isFinite);
+  const enteredSectionAverage=enteredSectionScores.length===4?(enteredSectionScores.reduce((sum,value)=>sum+value,0)/4).toFixed(1):null;
 
   return (
     <div className="page-container mock-tests-workspace">
@@ -619,7 +627,7 @@ export function MockTestsWorkspace() {
           <div style={{padding:20,overflowY:"auto",display:"grid",gap:16}}>
             <section style={{border:"1px solid var(--border-subtle)",borderRadius:12,padding:14,background:"var(--bg-card-subtle)"}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}><div><small style={{color:"var(--text-muted)"}}>Venue / room</small><strong style={{display:"block",marginTop:4}}>{activeSlotDetail.room}</strong></div><div><small style={{color:"var(--text-muted)"}}>Invigilator</small><strong style={{display:"block",marginTop:4}}>{activeSlotDetail.invigilator}</strong></div></div><div className="form-group" style={{marginTop:14,marginBottom:0}}><label>Session status</label><select value={activeSlotDetail.status} disabled={saving} onChange={event=>void updateSlotStatus(event.target.value as MockTestSlot["status"])}><option value="OPEN">Scheduled / Open</option>{activeSlotDetail.status==="FULL"&&<option value="FULL">Full</option>}<option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option><option value="POSTPONED">Postponed</option></select><small style={{display:"block",marginTop:5,color:"var(--text-muted)"}}>Changing this status updates the operational schedule immediately.</small></div></section>
             <section><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><div><h4 style={{margin:0,fontSize:14}}>Registered candidates</h4><p style={{margin:"3px 0 0",fontSize:11,color:"var(--text-muted)"}}>Internal students and external walk-ins staged for this session.</p></div><span className="badge-status counselling">{activeSlotDetail.candidates.length}/{activeSlotDetail.totalSeats}</span></div>
-              {activeSlotDetail.candidates.length?<div style={{display:"grid",gap:9}}>{activeSlotDetail.candidates.map(candidate=><article key={candidate.id} style={{display:"grid",gridTemplateColumns:"42px 1fr auto",gap:11,alignItems:"center",padding:12,border:"1px solid var(--border-subtle)",borderRadius:11}}><div style={{width:40,height:40,borderRadius:12,display:"grid",placeItems:"center",background:candidate.candidateType==="INTERNAL"?"#eff6ff":"#fff7ed",color:candidate.candidateType==="INTERNAL"?"#2563eb":"#ea580c",fontWeight:800}}>{candidate.name.split(" ").map(part=>part[0]).slice(0,2).join("")}</div><div><strong style={{fontSize:13}}>{candidate.name}</strong><div style={{fontSize:11,color:"var(--text-muted)",marginTop:3}}>{candidate.studentCode}{candidate.phone?` · ${candidate.phone}`:""}</div>{candidate.email&&<div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{candidate.email}</div>}</div><span className={`badge-status ${candidate.candidateType==="INTERNAL"?"enrolled":"counselling"}`}>{candidate.candidateType==="INTERNAL"?"Internal":"External"}</span></article>)}</div>:<div className="classes-empty compact"><Users size={24}/><strong>No candidates registered</strong><span>Use Register candidate on the slot card to stage the first candidate.</span></div>}
+              {activeSlotDetail.candidates.length?<div style={{display:"grid",gap:9}}>{activeSlotDetail.candidates.map(candidate=>{const scored=results.find(result=>result.bookingId===candidate.id);return <article key={candidate.id} style={{display:"grid",gridTemplateColumns:"42px 1fr auto",gap:11,alignItems:"center",padding:12,border:"1px solid var(--border-subtle)",borderRadius:11}}><div style={{width:40,height:40,borderRadius:12,display:"grid",placeItems:"center",background:candidate.candidateType==="INTERNAL"?"#eff6ff":"#fff7ed",color:candidate.candidateType==="INTERNAL"?"#2563eb":"#ea580c",fontWeight:800}}>{candidate.name.split(" ").map(part=>part[0]).slice(0,2).join("")}</div><div><strong style={{fontSize:13}}>{candidate.name}</strong><div style={{fontSize:11,color:"var(--text-muted)",marginTop:3}}>{candidate.studentCode}{candidate.phone?` · ${candidate.phone}`:""}</div>{candidate.email&&<div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{candidate.email}</div>}</div><div style={{display:"grid",justifyItems:"end",gap:7}}><span className={`badge-status ${candidate.candidateType==="INTERNAL"?"enrolled":"counselling"}`}>{candidate.candidateType==="INTERNAL"?"Internal":"External"}</span><button type="button" className={scored?"btn-secondary":"btn-primary"} style={{padding:"6px 9px",fontSize:11}} onClick={()=>openScheduledScore(activeSlotDetail,candidate)}>{scored?<Edit size={12}/>:<Award size={12}/>} {scored?"Update score":"Log score"}</button></div></article>})}</div>:<div className="classes-empty compact"><Users size={24}/><strong>No candidates registered</strong><span>Use Register candidate on the slot card to stage the first candidate.</span></div>}
             </section>
           </div>
         </motion.aside></div>}
@@ -672,7 +680,7 @@ export function MockTestsWorkspace() {
               <div className="modal-header-clean mock-result-dialog-header">
                 <div>
                   <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
-                    {editingResultId?"Edit Mock Test Evaluation":"Log Mock Test Evaluation Scores"}
+                    {scoreForm.bookingId?(editingResultId?"Update Scheduled Candidate Score":"Log Scheduled Candidate Score"):(editingResultId?"Edit Mock Test Evaluation":"Log Mock Test Evaluation Scores")}
                   </h3>
                   <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "2px 0 0" }}>
                     Record listening, reading, writing, and speaking marks
@@ -689,11 +697,12 @@ export function MockTestsWorkspace() {
 
               <form onSubmit={handleSaveResult}>
                 <div className="modal-body-clean mock-result-dialog-body">
-                  <div className="mock-candidate-type"><button type="button" className={scoreForm.candidateType==="INTERNAL"?"active":""} disabled={!!editingResultId} onClick={()=>setScoreForm({...scoreForm,candidateType:"INTERNAL",studentName:"",studentCode:"",phone:"",email:""})}><UserCheck size={15}/>Internal student</button><button type="button" className={scoreForm.candidateType==="EXTERNAL"?"active":""} disabled={!!editingResultId} onClick={()=>setScoreForm({...scoreForm,candidateType:"EXTERNAL",studentName:"",studentCode:"",phone:"",email:""})}><UserPlus size={15}/>External candidate</button></div>
+                  {scoreForm.bookingId&&<div style={{display:"flex",alignItems:"center",gap:12,padding:12,borderRadius:11,background:"#eff6ff",border:"1px solid #bfdbfe",marginBottom:14}}><CalendarCheck2 size={18} color="#2563eb"/><div><strong style={{display:"block",fontSize:12}}>Linked to scheduled mock registration</strong><small style={{color:"#475569"}}>{scoreForm.studentName} · {scoreForm.testType} · {scoreForm.testDate}</small></div><span className="badge-status enrolled" style={{marginLeft:"auto"}}>{editingResultId?"Updating score":"New score"}</span></div>}
+                  <div className="mock-candidate-type"><button type="button" className={scoreForm.candidateType==="INTERNAL"?"active":""} disabled={!!editingResultId||!!scoreForm.bookingId} onClick={()=>setScoreForm({...scoreForm,candidateType:"INTERNAL",studentName:"",studentCode:"",phone:"",email:""})}><UserCheck size={15}/>Internal student</button><button type="button" className={scoreForm.candidateType==="EXTERNAL"?"active":""} disabled={!!editingResultId||!!scoreForm.bookingId} onClick={()=>setScoreForm({...scoreForm,candidateType:"EXTERNAL",studentName:"",studentCode:"",phone:"",email:""})}><UserPlus size={15}/>External candidate</button></div>
                   {scoreForm.candidateType==="INTERNAL"?<div className="form-row-2">
                     <div className="form-group">
                       <label>Class student *</label>
-                      <select required disabled={!!editingResultId} value={scoreForm.studentCode} onChange={event=>{const student=classStudents.find(item=>item.studentCode===event.target.value);setScoreForm(current=>({...current,studentCode:student?.studentCode??"",studentName:student?.fullName??""}))}}>
+                      <select required disabled={!!editingResultId||!!scoreForm.bookingId} value={scoreForm.studentCode} onChange={event=>{const student=classStudents.find(item=>item.studentCode===event.target.value);setScoreForm(current=>({...current,studentCode:student?.studentCode??"",studentName:student?.fullName??""}))}}>
                         <option value="">Select student by name or code</option>
                         {classStudents.map(student=><option key={student.id} value={student.studentCode}>{student.fullName} · {student.studentCode} · {student.enrolledClass}</option>)}
                       </select>
@@ -703,12 +712,13 @@ export function MockTestsWorkspace() {
                       <label>Student Code *</label>
                       <input type="text" readOnly value={scoreForm.studentCode} placeholder="Filled from selected student" />
                     </div>
-                  </div>:<div className="mock-external-fields"><div className="form-group"><label>External candidate name *</label><input required value={scoreForm.studentName} onChange={event=>setScoreForm({...scoreForm,studentName:event.target.value})} placeholder="Full legal name"/></div><div className="form-group"><label>Phone</label><input value={scoreForm.phone} onChange={event=>setScoreForm({...scoreForm,phone:event.target.value})} placeholder="Contact number"/></div><div className="form-group"><label>Email</label><input type="email" value={scoreForm.email} onChange={event=>setScoreForm({...scoreForm,email:event.target.value})} placeholder="Optional email"/></div></div>}
+                  </div>:<div className="mock-external-fields"><div className="form-group"><label>External candidate name *</label><input required readOnly={!!scoreForm.bookingId} value={scoreForm.studentName} onChange={event=>setScoreForm({...scoreForm,studentName:event.target.value})} placeholder="Full legal name"/></div><div className="form-group"><label>Phone</label><input readOnly={!!scoreForm.bookingId} value={scoreForm.phone} onChange={event=>setScoreForm({...scoreForm,phone:event.target.value})} placeholder="Contact number"/></div><div className="form-group"><label>Email</label><input type="email" readOnly={!!scoreForm.bookingId} value={scoreForm.email} onChange={event=>setScoreForm({...scoreForm,email:event.target.value})} placeholder="Optional email"/></div></div>}
 
                   <div className="form-row-2">
                     <div className="form-group">
                       <label>Test Format *</label>
                       <select
+                        disabled={!!scoreForm.bookingId}
                         value={scoreForm.testType}
                         onChange={e => setScoreForm({ ...scoreForm, testType: e.target.value as MockTestResult["testType"] })}
                       >
@@ -724,6 +734,7 @@ export function MockTestsWorkspace() {
                       <input
                         type="date"
                         required
+                        readOnly={!!scoreForm.bookingId}
                         value={scoreForm.testDate}
                         onChange={e => setScoreForm({ ...scoreForm, testDate: e.target.value })}
                       />
@@ -740,9 +751,7 @@ export function MockTestsWorkspace() {
                       marginBottom: "12px",
                     }}
                   >
-                    <strong style={{ fontSize: "12.5px", display: "block", marginBottom: "8px" }}>
-                      Sectional Scores Breakdown
-                    </strong>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><strong style={{ fontSize: "12.5px" }}>Sectional Scores Breakdown</strong>{enteredSectionAverage&&<span className="badge-status counselling">Section average {enteredSectionAverage}</span>}</div>
                     <div className="mock-sectional-grid">
                       <div className="form-group">
                         <label>Listening</label>
