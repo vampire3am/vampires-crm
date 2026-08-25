@@ -54,6 +54,37 @@ export interface ChatChannel {
   unreadCount?: number;
 }
 
+const messageReadStorageKey = (staffId: string) => `aecs_read_message_ids_${staffId}`;
+
+function getReadMessageIds(staffId: string): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(messageReadStorageKey(staffId)) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+export function getUnreadMessages(messages: ChatMessage[], staffId: string) {
+  const readIds = getReadMessageIds(staffId);
+  return messages.filter(message => {
+    if (message.senderId === staffId || readIds.has(message.id)) return false;
+    return message.channelId != null || message.recipientId === staffId;
+  });
+}
+
+export function markMessagesRead(messages: ChatMessage[], staffId: string) {
+  const readIds = getReadMessageIds(staffId);
+  const previousSize = readIds.size;
+  for (const message of messages) {
+    if (message.senderId !== staffId && (message.channelId != null || message.recipientId === staffId)) {
+      readIds.add(message.id);
+    }
+  }
+  if (readIds.size === previousSize) return;
+  localStorage.setItem(messageReadStorageKey(staffId), JSON.stringify([...readIds].slice(-2000)));
+  window.dispatchEvent(new CustomEvent("aecs:message-read-state"));
+}
+
 // Staff are loaded exclusively from authenticated Supabase staff profiles.
 export const AECS_STAFF_18: StaffUser[] = [];
 
