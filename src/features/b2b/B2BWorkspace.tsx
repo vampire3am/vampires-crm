@@ -307,7 +307,10 @@ export function B2BWorkspace() {
       nextFollowUp: partnerForm.nextFollowUp,
       referredStudentsCount: Number(partnerForm.referredStudentsCount) || 0,
       totalPayoutClaimed: partnerForm.totalPayoutClaimed,
-      notes: partnerForm.notes.trim(),
+      // Interaction history is append-only and must never be overwritten by profile edits.
+      notes: editingPartnerId
+        ? (partners.find(partner => partner.id === editingPartnerId)?.notes ?? "")
+        : "",
     };
 
     try {
@@ -944,15 +947,12 @@ export function B2BWorkspace() {
                     </div>
                   </div>
 
-                  <div className="form-group">
-                    <label>Partnership Notes & Scope</label>
-                    <textarea
-                      rows={3}
-                      value={partnerForm.notes}
-                      onChange={e => setPartnerForm({ ...partnerForm, notes: e.target.value })}
-                      placeholder="Key recruitment goals, target study destinations, and special arrangements…"
-                    />
-                  </div>
+                  {editingPartnerId && (
+                    <div className="b2b-readonly-history-note">
+                      <ShieldCheck size={17}/>
+                      <div><strong>Interaction history is protected</strong><span>Partnership notes and logged interactions are read-only here. Add a new entry using “Log Interaction” from the partner profile.</span></div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="modal-footer-clean">
