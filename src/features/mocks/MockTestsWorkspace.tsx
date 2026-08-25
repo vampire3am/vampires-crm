@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
-  ArrowRight,
   Award,
   BadgeCheck,
   BookOpen,
@@ -11,37 +10,16 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
-  Clock,
-  CreditCard,
-  Download,
   Edit,
-  Eye,
-  FileCheck2,
-  FileSpreadsheet,
-  FileText,
-  Filter,
-  GraduationCap,
-  Info,
-  Laptop,
-  Mail,
-  MapPin,
-  MessageCircle,
-  MessageSquare,
-  MessageSquarePlus,
-  Phone,
   Plus,
-  RotateCcw,
   Search,
   Sparkles,
   Target,
-  Trash2,
   TrendingUp,
-  User,
   UserCheck,
   UserPlus,
   Users,
   X,
-  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -66,6 +44,8 @@ export function MockTestsWorkspace() {
   const [showAddSlotModal, setShowAddSlotModal] = useState(false);
   const [activeResultDetail, setActiveResultDetail] = useState<MockTestResult | null>(null);
   const [bookingSlot,setBookingSlot]=useState<MockTestSlot|null>(null);
+  const [activeSlotDetail,setActiveSlotDetail]=useState<MockTestSlot|null>(null);
+  const [activeDiagnosticKey,setActiveDiagnosticKey]=useState<string|null>(null);
   const [bookingStudentId,setBookingStudentId]=useState("");
   const [bookingCandidateType,setBookingCandidateType]=useState<"INTERNAL"|"EXTERNAL">("INTERNAL");
   const [bookingExternal,setBookingExternal]=useState({name:"",phone:"",email:""});
@@ -117,6 +97,7 @@ export function MockTestsWorkspace() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData().catch(error=>setFormError(error instanceof Error?error.message:"Unable to load mock-test workspace."));
   }, []);
 
@@ -186,6 +167,7 @@ export function MockTestsWorkspace() {
   };
 
   const handleBookCandidate=async(event:React.FormEvent)=>{event.preventDefault();if(!bookingSlot||(bookingCandidateType==="INTERNAL"&&!bookingStudentId)||(bookingCandidateType==="EXTERNAL"&&!bookingExternal.name.trim())){setFormError("Select an internal student or enter the external candidate name.");return}setSaving(true);setFormError("");try{await MockTestService.bookCandidate(bookingSlot.id,{type:bookingCandidateType,classStudentId:bookingStudentId,name:bookingExternal.name.trim(),phone:bookingExternal.phone.trim(),email:bookingExternal.email.trim()});await loadData();setBookingSlot(null);setBookingStudentId("");setBookingExternal({name:"",phone:"",email:""});setSuccessMessage("Candidate staged in the mock-test session successfully.")}catch(error){setFormError(error instanceof Error?error.message:"Unable to book candidate")}finally{setSaving(false)}};
+  const updateSlotStatus=async(status:MockTestSlot["status"])=>{if(!activeSlotDetail)return;setSaving(true);try{await MockTestService.updateSlotStatus(activeSlotDetail.id,status);setSlots(current=>current.map(slot=>slot.id===activeSlotDetail.id?{...slot,status}:slot));setActiveSlotDetail(current=>current?{...current,status}:current);setSuccessMessage(`Mock-test session marked as ${status.toLowerCase()}.`)}catch(error){setFormError(error instanceof Error?error.message:"Unable to update mock-test status")}finally{setSaving(false)}};
 
   const openNewResult=()=>{setEditingResultId(null);setFormError("");setShowAddResultModal(true)};
   const openEditResult=(result:MockTestResult)=>{setEditingResultId(result.id);setActiveResultDetail(null);setFormError("");setScoreForm({candidateType:result.candidateType,studentName:result.studentName,studentCode:result.studentCode==="External walk-in"?"":result.studentCode,phone:result.phone??"",email:result.email??"",testType:result.testType,testDate:result.testDate,venue:result.venue,examiner:result.examiner,listening:String(result.listening),reading:String(result.reading),writing:String(result.writing),speaking:String(result.speaking),overallScore:result.overallScore,status:result.status,examinerFeedback:result.examinerFeedback,targetAchieved:result.targetAchieved});setShowAddResultModal(true)};
@@ -223,6 +205,8 @@ export function MockTestsWorkspace() {
   const upcomingSlots = slots.filter(slot => slot.status === "OPEN").length;
   const readinessRate = totalMocks ? Math.round((examReadyCount / totalMocks) * 100) : 0;
   const averageScore = totalMocks ? (results.reduce((sum, result) => sum + (Number.parseFloat(result.overallScore) || 0), 0) / totalMocks).toFixed(1) : "—";
+  const diagnosticCandidates=useMemo(()=>{const grouped=new Map<string,{key:string;name:string;code:string;attempts:MockTestResult[]}>();for(const result of results){const key=result.candidateType==="INTERNAL"?result.studentCode:`external:${result.studentName.toLowerCase()}:${result.email??result.phone??""}`;const entry=grouped.get(key)??{key,name:result.studentName,code:result.studentCode,attempts:[]};entry.attempts.push(result);grouped.set(key,entry)}return Array.from(grouped.values()).map(entry=>{const attempts=entry.attempts.sort((a,b)=>b.testDate.localeCompare(a.testDate)||b.testCode.localeCompare(a.testCode));return{...entry,attempts,latest:attempts[0]}})},[results]);
+  const activeDiagnostic=diagnosticCandidates.find(candidate=>candidate.key===activeDiagnosticKey)??null;
 
   return (
     <div className="page-container mock-tests-workspace">
@@ -507,17 +491,19 @@ export function MockTestsWorkspace() {
               <div
                 key={slot.id}
                 className="crm-panel"
+                onClick={()=>setActiveSlotDetail(slot)}
                 style={{
                   padding: "18px",
                   display: "flex",
                   flexDirection: "column",
                   gap: "12px",
                   border: "1px solid var(--border-subtle)",
+                  cursor:"pointer",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span className="badge-status counselling">{slot.testType}</span>
-                  <span className={`badge-status ${slot.status === "OPEN" ? "enrolled" : "purple"}`}>
+                  <span className={`badge-status ${slot.status === "OPEN" ? "enrolled" : slot.status === "CANCELLED" ? "visa" : "purple"}`}>
                     {slot.status}
                   </span>
                 </div>
@@ -560,16 +546,16 @@ export function MockTestsWorkspace() {
                   </div>
                 </div>
 
-                <button
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><button type="button" className="btn-secondary" onClick={event=>{event.stopPropagation();setActiveSlotDetail(slot)}}><Users size={13}/><span>View candidates</span></button><button
                   type="button"
                   className="btn-primary"
                   style={{ width: "100%", marginTop: "auto", fontSize: "12px" }}
-                  disabled={slot.status === "FULL"}
-                  onClick={()=>{setBookingSlot(slot);setBookingStudentId("")}}
+                  disabled={slot.status !== "OPEN"}
+                  onClick={event=>{event.stopPropagation();setBookingSlot(slot);setBookingStudentId("")}}
                 >
                   <UserPlus size={13} />
-                  <span>{slot.status === "FULL" ? "Slot Full" : "Book Candidate Slot"}</span>
-                </button>
+                  <span>{slot.status === "OPEN" ? "Register candidate" : slot.status.replace("_"," ")}</span>
+                </button></div>
               </div>
             );
           })}
@@ -598,32 +584,58 @@ export function MockTestsWorkspace() {
                   <th>LATEST MOCK RESULT</th>
                   <th>STATUS</th>
                   <th>RECOMMENDED ACTION</th>
+                  <th style={{textAlign:"right"}}>ANALYSIS</th>
                 </tr>
               </thead>
               <tbody>
                 {results.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
                       No candidate diagnostic scorecards recorded yet. Log mock test evaluation scores to view readiness analytics.
                     </td>
                   </tr>
                 ) : (
-                  results.map(r => (
-                    <tr key={r.id}>
-                      <td><strong>{r.studentName} ({r.studentCode})</strong></td>
+                  diagnosticCandidates.map(candidate => {const r=candidate.latest;return(
+                    <tr key={candidate.key} onClick={()=>setActiveDiagnosticKey(candidate.key)} style={{cursor:"pointer"}}>
+                      <td><strong>{candidate.name} ({candidate.code})</strong><small style={{display:"block",color:"var(--text-muted)",marginTop:3}}>{candidate.attempts.length} recorded attempt{candidate.attempts.length===1?"":"s"}</small></td>
                       <td>{r.testType}</td>
                       <td>{r.testDate}</td>
                       <td><strong style={{ color: r.targetAchieved ? "var(--success, #059669)" : "var(--danger, #DC2626)" }}>{r.overallScore} {r.targetAchieved ? "(Cleared)" : "(Below Target)"}</strong></td>
                       <td><span className={`badge-status ${r.targetAchieved ? "enrolled" : "counselling"}`}>{r.status}</span></td>
                       <td>{r.examinerFeedback || "Standard review"}</td>
+                      <td style={{textAlign:"right"}}><button type="button" className="btn-secondary" onClick={event=>{event.stopPropagation();setActiveDiagnosticKey(candidate.key)}} style={{padding:"6px 10px",fontSize:11}}><TrendingUp size={13}/>View analysis</button></td>
                     </tr>
-                  ))
+                  )})
                 )}
               </tbody>
             </table>
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {activeSlotDetail&&<div className="modal-backdrop-clean" onClick={()=>setActiveSlotDetail(null)}><motion.aside initial={{x:"100%"}} animate={{x:0}} exit={{x:"100%"}} transition={{type:"spring",stiffness:340,damping:32}} style={{position:"fixed",right:0,top:0,bottom:0,width:"min(620px,100vw)",background:"var(--bg-card)",zIndex:1600,boxShadow:"var(--shadow-xl)",display:"flex",flexDirection:"column"}} onClick={event=>event.stopPropagation()}>
+          <div className="modal-header-clean mock-workflow-header"><div className="mock-header-icon"><CalendarCheck2 size={20}/></div><div><small>Scheduled mock exam</small><h3>{activeSlotDetail.title}</h3><p>{activeSlotDetail.testType} · {activeSlotDetail.date} at {activeSlotDetail.time}</p></div><button type="button" className="drawer-close-btn" onClick={()=>setActiveSlotDetail(null)}><X size={18}/></button></div>
+          <div style={{padding:20,overflowY:"auto",display:"grid",gap:16}}>
+            <section style={{border:"1px solid var(--border-subtle)",borderRadius:12,padding:14,background:"var(--bg-card-subtle)"}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}><div><small style={{color:"var(--text-muted)"}}>Venue / room</small><strong style={{display:"block",marginTop:4}}>{activeSlotDetail.room}</strong></div><div><small style={{color:"var(--text-muted)"}}>Invigilator</small><strong style={{display:"block",marginTop:4}}>{activeSlotDetail.invigilator}</strong></div></div><div className="form-group" style={{marginTop:14,marginBottom:0}}><label>Session status</label><select value={activeSlotDetail.status} disabled={saving} onChange={event=>void updateSlotStatus(event.target.value as MockTestSlot["status"])}><option value="OPEN">Scheduled / Open</option>{activeSlotDetail.status==="FULL"&&<option value="FULL">Full</option>}<option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option><option value="POSTPONED">Postponed</option></select><small style={{display:"block",marginTop:5,color:"var(--text-muted)"}}>Changing this status updates the operational schedule immediately.</small></div></section>
+            <section><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><div><h4 style={{margin:0,fontSize:14}}>Registered candidates</h4><p style={{margin:"3px 0 0",fontSize:11,color:"var(--text-muted)"}}>Internal students and external walk-ins staged for this session.</p></div><span className="badge-status counselling">{activeSlotDetail.candidates.length}/{activeSlotDetail.totalSeats}</span></div>
+              {activeSlotDetail.candidates.length?<div style={{display:"grid",gap:9}}>{activeSlotDetail.candidates.map(candidate=><article key={candidate.id} style={{display:"grid",gridTemplateColumns:"42px 1fr auto",gap:11,alignItems:"center",padding:12,border:"1px solid var(--border-subtle)",borderRadius:11}}><div style={{width:40,height:40,borderRadius:12,display:"grid",placeItems:"center",background:candidate.candidateType==="INTERNAL"?"#eff6ff":"#fff7ed",color:candidate.candidateType==="INTERNAL"?"#2563eb":"#ea580c",fontWeight:800}}>{candidate.name.split(" ").map(part=>part[0]).slice(0,2).join("")}</div><div><strong style={{fontSize:13}}>{candidate.name}</strong><div style={{fontSize:11,color:"var(--text-muted)",marginTop:3}}>{candidate.studentCode}{candidate.phone?` · ${candidate.phone}`:""}</div>{candidate.email&&<div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{candidate.email}</div>}</div><span className={`badge-status ${candidate.candidateType==="INTERNAL"?"enrolled":"counselling"}`}>{candidate.candidateType==="INTERNAL"?"Internal":"External"}</span></article>)}</div>:<div className="classes-empty compact"><Users size={24}/><strong>No candidates registered</strong><span>Use Register candidate on the slot card to stage the first candidate.</span></div>}
+            </section>
+          </div>
+        </motion.aside></div>}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeDiagnostic&&<div className="modal-backdrop-clean" onClick={()=>setActiveDiagnosticKey(null)}><motion.aside initial={{x:"100%"}} animate={{x:0}} exit={{x:"100%"}} transition={{type:"spring",stiffness:340,damping:32}} style={{position:"fixed",right:0,top:0,bottom:0,width:"min(760px,100vw)",background:"var(--bg-card)",zIndex:1600,boxShadow:"var(--shadow-xl)",display:"flex",flexDirection:"column"}} onClick={event=>event.stopPropagation()}>
+          <div className="modal-header-clean mock-workflow-header"><div className="mock-header-icon"><TrendingUp size={20}/></div><div><small>Diagnostic performance analysis</small><h3>{activeDiagnostic.name}</h3><p>{activeDiagnostic.code} · {activeDiagnostic.attempts.length} historical mock attempt{activeDiagnostic.attempts.length===1?"":"s"}</p></div><button type="button" className="drawer-close-btn" onClick={()=>setActiveDiagnosticKey(null)}><X size={18}/></button></div>
+          <div style={{padding:20,overflowY:"auto",display:"grid",gap:16}}>{(()=>{const chronological=[...activeDiagnostic.attempts].sort((a,b)=>a.testDate.localeCompare(b.testDate)||a.testCode.localeCompare(b.testCode));const latest=activeDiagnostic.latest;const first=chronological[0];const improvement=(Number.parseFloat(latest.overallScore)||0)-(Number.parseFloat(first.overallScore)||0);const avg=(key:"listening"|"reading"|"writing"|"speaking")=>{const values=activeDiagnostic.attempts.map(item=>Number(item[key])).filter(Number.isFinite);return values.length?(values.reduce((a,b)=>a+b,0)/values.length).toFixed(1):"—"};return <>
+            <div className="metrics-grid-4"><div className="metric-box"><span className="metric-label">LATEST SCORE</span><strong className="metric-value" style={{fontSize:24}}>{latest.overallScore}</strong><small>{latest.testDate}</small></div><div className="metric-box"><span className="metric-label">TARGET OUTCOME</span><strong style={{fontSize:14,color:latest.targetAchieved?"var(--success, #059669)":"var(--accent-orange, #ea580c)"}}>{latest.targetAchieved?"Achieved":"Not achieved"}</strong><small>{activeDiagnostic.attempts.filter(item=>item.targetAchieved).length} cleared attempt(s)</small></div><div className="metric-box"><span className="metric-label">SCORE CHANGE</span><strong className="metric-value" style={{fontSize:24,color:improvement>=0?"var(--success, #059669)":"var(--danger, #dc2626)"}}>{improvement>0?"+":""}{improvement.toFixed(1)}</strong><small>First to latest</small></div><div className="metric-box"><span className="metric-label">ATTEMPTS</span><strong className="metric-value" style={{fontSize:24}}>{activeDiagnostic.attempts.length}</strong><small>{latest.testType}</small></div></div>
+            <section style={{border:"1px solid var(--border-subtle)",borderRadius:12,padding:14}}><h4 style={{fontSize:13,margin:"0 0 12px"}}>Average sectional performance</h4><div className="metrics-grid-4">{([['Listening','listening'],['Reading','reading'],['Writing','writing'],['Speaking','speaking']] as const).map(([label,key])=><div key={key} style={{padding:12,borderRadius:10,background:"var(--bg-card-subtle)",textAlign:"center"}}><small style={{color:"var(--text-muted)"}}>{label}</small><strong style={{display:"block",fontSize:20,marginTop:5}}>{avg(key)}</strong></div>)}</div></section>
+            <section><h4 style={{fontSize:13,margin:"0 0 10px"}}>Attempt history</h4><div className="table-wrapper"><table className="crm-table"><thead><tr><th>DATE</th><th>TEST</th><th>L · R · W · S</th><th>OVERALL</th><th>TARGET</th><th>EXAMINER</th></tr></thead><tbody>{activeDiagnostic.attempts.map(attempt=><tr key={attempt.id}><td>{attempt.testDate}</td><td>{attempt.testType}</td><td>{attempt.listening} · {attempt.reading} · {attempt.writing} · {attempt.speaking}</td><td><strong>{attempt.overallScore}</strong></td><td><span className={`badge-status ${attempt.targetAchieved?"enrolled":"counselling"}`}>{attempt.targetAchieved?"Achieved":"Below target"}</span></td><td>{attempt.examiner}</td></tr>)}</tbody></table></div></section>
+            <section style={{padding:14,borderRadius:12,background:"var(--bg-card-subtle)",border:"1px solid var(--border-subtle)"}}><small style={{fontWeight:800,color:"var(--text-muted)"}}>LATEST EXAMINER RECOMMENDATION</small><p style={{fontSize:12,lineHeight:1.65,margin:"7px 0 0"}}>{latest.examinerFeedback||"No examiner feedback recorded."}</p></section>
+          </>})()}</div>
+        </motion.aside></div>}
+      </AnimatePresence>
 
       {/* =========================================================================
           MODAL: SCHEDULE MOCK TEST
@@ -698,7 +710,7 @@ export function MockTestsWorkspace() {
                       <label>Test Format *</label>
                       <select
                         value={scoreForm.testType}
-                        onChange={e => setScoreForm({ ...scoreForm, testType: e.target.value as any })}
+                        onChange={e => setScoreForm({ ...scoreForm, testType: e.target.value as MockTestResult["testType"] })}
                       >
                         <option value="IELTS Academic">IELTS Academic</option>
                         <option value="PTE Academic">PTE Academic</option>
