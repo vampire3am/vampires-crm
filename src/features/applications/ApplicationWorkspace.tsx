@@ -123,6 +123,11 @@ export function ApplicationWorkspace() {
     notes: "",
   });
 
+  useEffect(() => {
+    if (!profile?.full_name) return;
+    setNewAppForm(current => current.officer ? current : { ...current, officer: profile.full_name });
+  }, [profile?.full_name]);
+
   const resetApplicationForm = () => {
     setNewAppForm({
       studentCode: "", studentName: "", universityName: "", country: "", countryCode: "",
@@ -419,9 +424,12 @@ export function ApplicationWorkspace() {
         await ApplicationService.createApplication(payload);
         await loadApplications();
       }
+      notifySuccess(editingApplicationId ? "Application updated" : "Application submitted", `${newAppForm.studentName}'s application for ${newAppForm.universityName} was saved successfully.`);
       closeApplicationForm();
     } catch (cause) {
-      setApplicationFormError(cause instanceof Error ? cause.message : "Unable to save this application.");
+      const message = cause instanceof Error ? cause.message : "Unable to save this application.";
+      setApplicationFormError(message);
+      notifyError("Unable to submit application", message);
     } finally {
       setSavingApplication(false);
     }
@@ -1042,10 +1050,9 @@ export function ApplicationWorkspace() {
                     <header><span>3</span><div><strong>Application details</strong><small>Record financial terms, ownership and submission controls.</small></div></header>
                   <div className="form-row-2">
                     <div className="form-group">
-                      <label>Annual Tuition Fee *</label>
+                      <label>Annual Tuition Fee</label>
                       <input
                         type="text"
-                        required
                         value={newAppForm.tuitionFee}
                         onChange={e => setNewAppForm({ ...newAppForm, tuitionFee: e.target.value })}
                         placeholder="e.g. £16,500 or A$34,000"
@@ -1080,19 +1087,21 @@ export function ApplicationWorkspace() {
                     </div>
 
                     <div className="form-group">
-                      <label>Application Officer *</label>
+                      <label>Application Officer</label>
                       <input
                         type="text"
-                        required
-                        value={newAppForm.officer}
-                        onChange={e => setNewAppForm({ ...newAppForm, officer: e.target.value })}
+                        readOnly
+                        className="application-readonly-field"
+                        value={newAppForm.officer || profile?.full_name || "Current signed-in staff"}
                       />
+                      <small className="application-field-hint">Assigned automatically to the staff member submitting this application.</small>
                     </div>
                   </div>
 
                   <div className="form-group">
-                    <label>Submission / offer deadline *</label>
-                    <input type="date" required value={newAppForm.deadline} onChange={e => setNewAppForm({ ...newAppForm, deadline: e.target.value })} />
+                    <label>Submission / Offer Deadline</label>
+                    <input type="date" value={newAppForm.deadline} onChange={e => setNewAppForm({ ...newAppForm, deadline: e.target.value })} />
+                    <small className="application-field-hint">Optional when the institution has not published a deadline yet.</small>
                   </div>
 
                   <div className="form-group">
