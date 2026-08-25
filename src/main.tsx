@@ -43,32 +43,6 @@ import "./styles/university-course-manager.css";
 import "./styles/lead-conversion-dialog.css";
 import { ErrorBoundary } from "./core/error/ErrorBoundary";
 
-// Total purge of previous sample dataset keys on initial load
-const PURGE_FLAG = "aecs_crm_cleared_v6";
-if (!localStorage.getItem(PURGE_FLAG)) {
-  const keysToPurge = [
-    "aecs_persistent_students",
-    "aecs_persistent_leads",
-    "aecs_persistent_b2b_partners_v2",
-    "aecs_class_students_v2",
-    "aecs_mock_test_results_v2",
-    "aecs_mock_test_slots_v2",
-    "aecs_persistent_applications",
-    "aecs_persistent_applications_v3",
-    "aecs_persistent_counselling",
-    "aecs_persistent_invoices",
-    "aecs_persistent_journals",
-    "aecs_persistent_commissions",
-    "aecs_documents_v2",
-    "aecs_course_batches_v2",
-    "aecs_persistent_batches",
-    "aecs_active_chat_channel",
-    "aecs_active_chat_recipient",
-  ];
-  keysToPurge.forEach(k => localStorage.removeItem(k));
-  localStorage.setItem(PURGE_FLAG, "true");
-}
-
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary><BrowserRouter><App /></BrowserRouter></ErrorBoundary>

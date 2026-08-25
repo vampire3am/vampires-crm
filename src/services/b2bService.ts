@@ -1,123 +1,89 @@
+import { supabase } from "../lib/supabase";
+
 export interface B2BPartner {
-  id: string;
-  code: string; // e.g. B2B-101
-  name: string;
+  id: string; code: string; name: string;
   type: "Aggregator" | "Direct University Partner" | "Sub-Agent / Channel Partner" | "Global Recruiter" | "Language & Test Center";
-  country: string;
-  countryCode: string;
-  city?: string;
-  photoUrl?: string;
-  contactPerson: string;
-  contactEmail: string;
-  contactPhone: string;
+  country: string; countryCode: string; city?: string; photoUrl?: string;
+  contactPerson: string; contactEmail: string; contactPhone: string;
   status: "Active" | "In progress" | "Agreement Pending" | "Follow-up Due" | "Inactive";
   commissionTerms: string;
   agreementStatus: "Signed MOU" | "Under Review" | "Draft Pending" | "Expired";
-  agreementExpiry: string;
-  assignedStaff: string;
-  nextFollowUp: string;
-  referredStudentsCount: number;
-  totalPayoutClaimed: string;
-  notes: string;
-  createdAt: string;
+  agreementExpiry: string; assignedStaff: string; nextFollowUp: string;
+  referredStudentsCount: number; totalPayoutClaimed: string; notes: string; createdAt: string;
 }
 
-const STORAGE_KEY = "aecs_persistent_b2b_partners_v2";
+const LEGACY_STORAGE_KEY = "aecs_persistent_b2b_partners_v2";
+type PartnerRow = Record<string, any>;
 
-const INITIAL_B2B_PARTNERS: B2BPartner[] = [];
+const toRow = (partner: Partial<B2BPartner>) => ({
+  id: partner.id, code: partner.code, name: partner.name, partner_type: partner.type,
+  country: partner.country, country_code: partner.countryCode, city: partner.city,
+  photo_url: partner.photoUrl, contact_person: partner.contactPerson,
+  contact_email: partner.contactEmail, contact_phone: partner.contactPhone,
+  status: partner.status, commission_terms: partner.commissionTerms,
+  agreement_status: partner.agreementStatus,
+  agreement_expiry: partner.agreementExpiry || undefined,
+  assigned_staff: partner.assignedStaff, next_follow_up: partner.nextFollowUp || undefined,
+  referred_students_count: partner.referredStudentsCount,
+  total_payout_claimed: partner.totalPayoutClaimed, notes: partner.notes,
+  created_at: partner.createdAt ? `${partner.createdAt}T00:00:00Z` : undefined,
+});
+
+const cleanRow = (row: PartnerRow) => Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
+
+const fromRow = (row: PartnerRow): B2BPartner => ({
+  id: row.id, code: row.code, name: row.name, type: row.partner_type,
+  country: row.country, countryCode: row.country_code, city: row.city || "", photoUrl: row.photo_url || "",
+  contactPerson: row.contact_person, contactEmail: row.contact_email, contactPhone: row.contact_phone,
+  status: row.status, commissionTerms: row.commission_terms, agreementStatus: row.agreement_status,
+  agreementExpiry: row.agreement_expiry || "", assignedStaff: row.assigned_staff,
+  nextFollowUp: row.next_follow_up || "", referredStudentsCount: Number(row.referred_students_count || 0),
+  totalPayoutClaimed: row.total_payout_claimed || "NPR 0", notes: row.notes || "",
+  createdAt: String(row.created_at).slice(0, 10),
+});
+
+async function migrateLegacyPartners() {
+  const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (!raw) return;
+  try {
+    const legacy = JSON.parse(raw) as B2BPartner[];
+    if (!legacy.length) { localStorage.removeItem(LEGACY_STORAGE_KEY); return; }
+    const { error } = await supabase.from("b2b_partners").upsert(legacy.map(item => cleanRow(toRow(item))), { onConflict: "id" });
+    if (error) throw error;
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch { /* Keep the legacy copy when migration fails. */ }
+}
 
 export const B2BService = {
-  getPartners: async (): Promise<B2BPartner[]> => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return INITIAL_B2B_PARTNERS;
+  async getPartners(): Promise<B2BPartner[]> {
+    await migrateLegacyPartners();
+    const { data, error } = await supabase.from("b2b_partners").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data || []).map(fromRow);
   },
-
-  savePartners: (partners: B2BPartner[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(partners));
+  async createPartner(partner: Omit<B2BPartner, "id" | "code" | "createdAt">): Promise<B2BPartner> {
+    const record = { ...partner, id: crypto.randomUUID(), code: `B2B-${Date.now().toString().slice(-7)}`, createdAt: new Date().toISOString().slice(0, 10) };
+    const { data, error } = await supabase.from("b2b_partners").insert(cleanRow(toRow(record))).select("*").single();
+    if (error) throw error;
+    return fromRow(data);
   },
-
-  createPartner: async (partner: Omit<B2BPartner, "id" | "code" | "createdAt">): Promise<B2BPartner> => {
-    const current = await B2BService.getPartners();
-    const nextNum = current.length + 101;
-    const newPartner: B2BPartner = {
-      ...partner,
-      id: `b2b-${Date.now()}`,
-      code: `B2B-${nextNum}`,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    const updated = [newPartner, ...current];
-    B2BService.savePartners(updated);
-    return newPartner;
+  async updatePartner(id: string, patch: Partial<B2BPartner>): Promise<B2BPartner | null> {
+    const row = cleanRow(toRow(patch)); delete row.id; delete row.code; delete row.created_at;
+    const { data, error } = await supabase.from("b2b_partners").update(row).eq("id", id).select("*").maybeSingle();
+    if (error) throw error;
+    return data ? fromRow(data) : null;
   },
-
-  updatePartner: async (id: string, patch: Partial<B2BPartner>): Promise<B2BPartner | null> => {
-    const current = await B2BService.getPartners();
-    const index = current.findIndex(p => p.id === id);
-    if (index === -1) return null;
-    current[index] = { ...current[index], ...patch };
-    B2BService.savePartners(current);
-    return current[index];
-  },
-
-  deletePartner: async (id: string): Promise<boolean> => {
-    const current = await B2BService.getPartners();
-    const updated = current.filter(p => p.id !== id);
-    B2BService.savePartners(updated);
+  async deletePartner(id: string): Promise<boolean> {
+    const { error } = await supabase.from("b2b_partners").delete().eq("id", id);
+    if (error) throw error;
     return true;
   },
-
-  exportCsv: (partners: B2BPartner[]) => {
-    const headers = [
-      "ID",
-      "Partner Name",
-      "Type",
-      "Country",
-      "City",
-      "Contact Person",
-      "Contact Email",
-      "Contact Phone",
-      "Status",
-      "Commission Terms",
-      "Agreement Status",
-      "Agreement Expiry",
-      "Staff Owner",
-      "Next Follow-up",
-      "Referred Students",
-      "Payout Claimed",
-    ];
-
-    const rows = partners.map(p => [
-      `"${p.code}"`,
-      `"${p.name.replace(/"/g, '""')}"`,
-      `"${p.type}"`,
-      `"${p.country}"`,
-      `"${p.city || ""}"`,
-      `"${p.contactPerson.replace(/"/g, '""')}"`,
-      `"${p.contactEmail}"`,
-      `"${p.contactPhone}"`,
-      `"${p.status}"`,
-      `"${p.commissionTerms.replace(/"/g, '""')}"`,
-      `"${p.agreementStatus}"`,
-      `"${p.agreementExpiry}"`,
-      `"${p.assignedStaff}"`,
-      `"${p.nextFollowUp}"`,
-      p.referredStudentsCount,
-      `"${p.totalPayoutClaimed}"`,
-    ]);
-
-    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `AECS_B2B_Partners_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  exportCsv(partners: B2BPartner[]) {
+    const headers = ["ID","Partner Name","Type","Country","City","Contact Person","Contact Email","Contact Phone","Status","Commission Terms","Agreement Status","Agreement Expiry","Staff Owner","Next Follow-up","Referred Students","Payout Claimed"];
+    const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rows = partners.map(p => [p.code,p.name,p.type,p.country,p.city,p.contactPerson,p.contactEmail,p.contactPhone,p.status,p.commissionTerms,p.agreementStatus,p.agreementExpiry,p.assignedStaff,p.nextFollowUp,p.referredStudentsCount,p.totalPayoutClaimed].map(quote));
+    const url = URL.createObjectURL(new Blob([[headers.join(","), ...rows.map(row => row.join(","))].join("\n")], { type: "text/csv;charset=utf-8;" }));
+    const link = document.createElement("a"); link.href = url; link.download = `AECS_B2B_Partners_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
   },
 };
