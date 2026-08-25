@@ -1,8 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertCircle, Award, BookOpen, CalendarCheck2, Check, ChevronRight, Clock, GraduationCap, Plus, Search, TrendingUp, UserPlus, Users, X } from "lucide-react";
+import { AlertCircle, Award, BookOpen, CalendarCheck2, Camera, Check, ChevronRight, Clock, GraduationCap, Pencil, Plus, Search, TrendingUp, UserPlus, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ClassStudent, ClassStudentService } from "../../services/classStudentService";
+import { StudentDirectoryRecord, StudentService } from "../../services/studentService";
+import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 
 interface BatchItem {
   id: string;
@@ -24,6 +26,7 @@ export function ClassesWorkspace() {
 
   const [activeTab, setActiveTab] = useState<"students" | "batches" | "attendance" | "faculty">("students");
   const [students, setStudents] = useState<ClassStudent[]>([]);
+  const [internalStudents, setInternalStudents] = useState<StudentDirectoryRecord[]>([]);
   const [batches, setBatches] = useState<BatchItem[]>(INITIAL_BATCHES);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,6 +43,12 @@ export function ClassesWorkspace() {
   const [errorMessage,setErrorMessage]=useState("");
   const [successMessage,setSuccessMessage]=useState("");
   const [isLoading,setIsLoading]=useState(true);
+  const [studentSource,setStudentSource]=useState<"INTERNAL"|"EXTERNAL">("INTERNAL");
+  const [selectedInternalStudentId,setSelectedInternalStudentId]=useState("");
+  const [classStudentPhotoUrls,setClassStudentPhotoUrls]=useState<Record<string,string>>({});
+  const [photoUploading,setPhotoUploading]=useState(false);
+  const [editingClassStudent,setEditingClassStudent]=useState<ClassStudent|null>(null);
+  const [classStudentEditForm,setClassStudentEditForm]=useState<Partial<ClassStudent>>({});
 
   // Exact Add Student Form State matching the user's uploaded screenshot!
   const [studentForm, setStudentForm] = useState({
@@ -83,8 +92,8 @@ export function ClassesWorkspace() {
 
   // Load students
   const loadStudents = async () => {
-    try { const [data,batchRows] = await Promise.all([ClassStudentService.getStudents(),ClassStudentService.getBatches()]);
-      setStudents(data);setBatches(batchRows as BatchItem[]);setErrorMessage("");
+    try { const [data,batchRows,crmStudents] = await Promise.all([ClassStudentService.getStudents(),ClassStudentService.getBatches(),StudentService.getStudents()]);
+      setStudents(data);setBatches(batchRows as BatchItem[]);setInternalStudents(crmStudents);setErrorMessage("");
     } catch(error) { setErrorMessage(error instanceof Error?error.message:"Unable to load class operations"); }
     finally { setIsLoading(false); }
   };
@@ -94,6 +103,13 @@ export function ClassesWorkspace() {
     void loadStudents();
   }, []);
 
+  useEffect(()=>{let active=true;void Promise.all(students.filter(student=>student.photoPath).map(async student=>[student.id,await ClassStudentService.photoUrl(student.photoPath!)] as const)).then(entries=>{if(active)setClassStudentPhotoUrls(Object.fromEntries(entries))}).catch(()=>{});return()=>{active=false}},[students]);
+
+  const uploadClassStudentPhoto=async(file?:File)=>{if(!file||!activeStudentDetail)return;if(!["image/jpeg","image/png","image/webp"].includes(file.type)){notifyError("Unsupported photo","Choose a JPG, PNG or WEBP image.");return}if(file.size>5*1024*1024){notifyError("Photo is too large","Choose an image below 5 MB.");return}setPhotoUploading(true);try{await ClassStudentService.uploadPhoto(activeStudentDetail,file);const refreshed=await ClassStudentService.getStudents();setStudents(refreshed);const current=refreshed.find(student=>student.id===activeStudentDetail.id)??null;setActiveStudentDetail(current);notifySuccess("Class student photo updated",`${activeStudentDetail.fullName}'s profile picture is now saved.`)}catch(error){notifyError("Photo upload failed",error instanceof Error?error.message:"Unable to upload photo")}finally{setPhotoUploading(false)}};
+
+  const beginClassStudentEdit=(student:ClassStudent)=>{setEditingClassStudent(student);setClassStudentEditForm({fullName:student.fullName,phone:student.phone,altPhone:student.altPhone??"",email:student.email??"",gender:student.gender,educationLevel:student.educationLevel??"",guardianName:student.guardianName??"",guardianPhone:student.guardianPhone??"",address:student.address??"",recordStatus:student.recordStatus,notes:student.notes??""})};
+  const saveClassStudentEdit=async(event:React.FormEvent)=>{event.preventDefault();if(!editingClassStudent)return;try{const patch={...classStudentEditForm};if(editingClassStudent.linkedStudentId){delete patch.fullName;delete patch.phone;delete patch.email;delete patch.gender;delete patch.address}await ClassStudentService.updateStudent(editingClassStudent.id,patch);const refreshed=await ClassStudentService.getStudents();setStudents(refreshed);setActiveStudentDetail(refreshed.find(student=>student.id===editingClassStudent.id)??null);setEditingClassStudent(null);notifySuccess("Class student updated","The profile changes were saved successfully.")}catch(error){notifyError("Update failed",error instanceof Error?error.message:"Unable to update class student")}};
+
   // Submit Handler for Add Class Student (Matching User's Screenshot Form)
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +118,7 @@ export function ClassesWorkspace() {
       return;
     }
     try { await ClassStudentService.createStudent({
+      linkedStudentId: studentSource === "INTERNAL" ? selectedInternalStudentId : undefined,
       fullName: studentForm.fullName.trim(),
       phone: studentForm.phone.trim(),
       altPhone: studentForm.altPhone.trim(),
@@ -151,6 +168,7 @@ export function ClassesWorkspace() {
       enrolmentNotes: "",
       feePaid: "",
     });
+    setSelectedInternalStudentId("");
     } catch(error) { setErrorMessage(error instanceof Error?error.message:"Unable to enrol class student"); }
   };
 
@@ -213,6 +231,13 @@ export function ClassesWorkspace() {
   const attendanceStudents=students.filter(student=>attendanceBatch==="ALL"||student.batchName===attendanceBatch);
   const attendanceMarked=attendanceStudents.filter(student=>attendance[student.id]).length;
   const eligibleBatches = batches.filter(batch => batch.status !== "COMPLETED" && batch.enrolledStudents < batch.maxCapacity);
+
+  const chooseInternalStudent = (studentId:string) => {
+    setSelectedInternalStudentId(studentId);
+    const student=internalStudents.find(item=>item.id===studentId);
+    if(!student)return;
+    setStudentForm(current=>({...current,fullName:student.fullName,phone:student.phone,email:student.email,gender:student.gender,address:student.address,educationLevel:student.highestQualification,guardianName:"",guardianPhone:"",altPhone:"",notes:`Linked to ${student.code}`}));
+  };
 
   const selectBatch = (batchCode: string) => {
     const batch = batches.find(item => item.batchCode === batchCode);
@@ -771,9 +796,7 @@ export function ClassesWorkspace() {
         </div>
       )}
 
-      {/* =========================================================================
-          EXACT ADD CLASS STUDENT MODAL (MATCHING USER SCREENSHOT!)
-          ========================================================================= */}
+      {/* Add class student */}
       <AnimatePresence>
         {showAddStudentModal && (
           <div className="modal-backdrop-clean" onClick={() => setShowAddStudentModal(false)}>
@@ -781,12 +804,11 @@ export function ClassesWorkspace() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="modal-dialog-clean"
-              style={{ maxWidth: "720px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+              className="modal-dialog-clean classes-student-dialog"
               onClick={e => e.stopPropagation()}
             >
-              {/* Modal Top Header (Matching image header with eyebrow and orange plus) */}
               <div
+                className="classes-student-dialog-header"
                 style={{
                   padding: "16px 22px",
                   borderBottom: "1px solid var(--border-subtle)",
@@ -801,7 +823,7 @@ export function ClassesWorkspace() {
                     ← Classes
                   </span>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div
+                    <div className="classes-student-dialog-icon"
                       style={{
                         width: "22px",
                         height: "22px",
@@ -818,11 +840,11 @@ export function ClassesWorkspace() {
                       +
                     </div>
                     <h3 style={{ fontSize: "17px", fontWeight: 800, margin: 0 }}>
-                      Add class student
+                      Enrol a class student
                     </h3>
                   </div>
                   <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "2px 0 0" }}>
-                    This record is independent from Leads and consultancy Students.
+                    Create a class-only learner profile and assign the first batch.
                   </p>
                 </div>
 
@@ -835,9 +857,24 @@ export function ClassesWorkspace() {
                 </button>
               </div>
 
-              <form onSubmit={handleCreateStudent} style={{ flex: 1, overflowY: "auto", padding: "20px 22px" }}>
-                {/* SECTION 1: S · Student details (Matching Screenshot Card 1) */}
+              <form onSubmit={handleCreateStudent} className="classes-student-dialog-form">
+                <div className="classes-student-source">
+                  <div className="classes-student-source-copy"><strong>Student type</strong><span>Choose an existing CRM student or create an independent class learner.</span></div>
+                  <div className="classes-student-source-toggle" role="group" aria-label="Student type">
+                    <button type="button" className={studentSource==="INTERNAL"?"active":""} onClick={()=>{setStudentSource("INTERNAL");setSelectedInternalStudentId("")}}><Users size={15}/><span>Internal student</span></button>
+                    <button type="button" className={studentSource==="EXTERNAL"?"active":""} onClick={()=>{setStudentSource("EXTERNAL");setSelectedInternalStudentId("");setStudentForm(current=>({...current,fullName:"",phone:"",altPhone:"",email:"",gender:"Male",educationLevel:"",guardianName:"",guardianPhone:"",address:"",notes:""}))}}><UserPlus size={15}/><span>External student</span></button>
+                  </div>
+                  {studentSource==="INTERNAL"&&<div className="classes-internal-picker">
+                    <label>Select CRM student *</label>
+                    <select required value={selectedInternalStudentId} onChange={event=>chooseInternalStudent(event.target.value)}>
+                      <option value="">Search by student name or AECS code</option>
+                      {internalStudents.map(student=><option key={student.id} value={student.id}>{student.code} · {student.fullName} · {student.phone||student.email}</option>)}
+                    </select>
+                    {selectedInternalStudentId&&(()=>{const selected=internalStudents.find(student=>student.id===selectedInternalStudentId);return selected?<div className="classes-internal-preview"><span className="classes-internal-avatar">{selected.fullName.split(/\s+/).slice(0,2).map(part=>part[0]).join("")}</span><div><strong>{selected.fullName}</strong><span>{selected.code} · {selected.email||"No email"} · {selected.phone||"No phone"}</span></div><em>Profile linked</em></div>:null})()}
+                  </div>}
+                </div>
                 <div
+                  className="classes-student-form-panel identity"
                   style={{
                     background: "var(--bg-card)",
                     border: "1px solid var(--border-subtle)",
@@ -863,7 +900,7 @@ export function ClassesWorkspace() {
                     >
                       S
                     </div>
-                    <strong style={{ fontSize: "13.5px" }}>Student details</strong>
+                    <div className="classes-student-section-title"><strong>Student profile</strong><span>Contact and personal information</span></div>
                   </div>
 
                   <div className="form-row-2">
@@ -872,6 +909,7 @@ export function ClassesWorkspace() {
                       <input
                         type="text"
                         required
+                        readOnly={studentSource==="INTERNAL"}
                         value={studentForm.fullName}
                         onChange={e => setStudentForm({ ...studentForm, fullName: e.target.value })}
                       />
@@ -882,6 +920,7 @@ export function ClassesWorkspace() {
                       <input
                         type="text"
                         required
+                        readOnly={studentSource==="INTERNAL"}
                         value={studentForm.phone}
                         onChange={e => setStudentForm({ ...studentForm, phone: e.target.value })}
                         placeholder="+977 98XXXXXXXX"
@@ -894,6 +933,7 @@ export function ClassesWorkspace() {
                       <label>Alternate phone</label>
                       <input
                         type="text"
+                        readOnly={studentSource==="INTERNAL"}
                         value={studentForm.altPhone}
                         onChange={e => setStudentForm({ ...studentForm, altPhone: e.target.value })}
                       />
@@ -903,6 +943,7 @@ export function ClassesWorkspace() {
                       <label>Email</label>
                       <input
                         type="email"
+                        readOnly={studentSource==="INTERNAL"}
                         value={studentForm.email}
                         onChange={e => setStudentForm({ ...studentForm, email: e.target.value })}
                       />
@@ -913,6 +954,7 @@ export function ClassesWorkspace() {
                     <div className="form-group">
                       <label>Gender</label>
                       <select
+                        disabled={studentSource==="INTERNAL"}
                         value={studentForm.gender}
                         onChange={e => setStudentForm({ ...studentForm, gender: e.target.value as ClassStudent["gender"] })}
                       >
@@ -926,6 +968,7 @@ export function ClassesWorkspace() {
                       <label>Education level</label>
                       <input
                         type="text"
+                        readOnly={studentSource==="INTERNAL"}
                         value={studentForm.educationLevel}
                         onChange={e => setStudentForm({ ...studentForm, educationLevel: e.target.value })}
                         placeholder="e.g. Grade 12, Bachelor's"
@@ -957,6 +1000,7 @@ export function ClassesWorkspace() {
                     <label>Address</label>
                     <textarea
                       rows={2}
+                      readOnly={studentSource==="INTERNAL"}
                       value={studentForm.address}
                       onChange={e => setStudentForm({ ...studentForm, address: e.target.value })}
                     />
@@ -972,8 +1016,8 @@ export function ClassesWorkspace() {
                   </div>
                 </div>
 
-                {/* SECTION 2: C · First class enrolment (Matching Screenshot Card 2) */}
                 <div
+                  className="classes-student-form-panel enrolment"
                   style={{
                     background: "var(--bg-card)",
                     border: "1px solid var(--border-subtle)",
@@ -999,7 +1043,7 @@ export function ClassesWorkspace() {
                     >
                       C
                     </div>
-                    <strong style={{ fontSize: "13.5px" }}>First class enrolment</strong>
+                    <div className="classes-student-section-title"><strong>Batch enrolment</strong><span>Schedule and delivery preferences</span></div>
                   </div>
 
                   <div className="form-group">
@@ -1059,8 +1103,8 @@ export function ClassesWorkspace() {
                   </div>
                 </div>
 
-                {/* Bottom Footer Buttons (Matching Screenshot) */}
                 <div
+                  className="classes-student-dialog-footer"
                   style={{
                     display: "flex",
                     justifyContent: "flex-end",
@@ -1079,6 +1123,7 @@ export function ClassesWorkspace() {
                   <button
                     type="submit"
                     className="btn-primary"
+                    disabled={!eligibleBatches.length}
                     style={{ background: "var(--accent-orange, #EA580C)", borderColor: "var(--accent-orange, #EA580C)", boxShadow: "0 2px 8px rgba(234, 88, 12, 0.25)" }}
                   >
                     Create student record
@@ -1269,9 +1314,10 @@ export function ClassesWorkspace() {
                       alignItems: "center",
                       justifyContent: "center",
                       fontWeight: 800,
+                      overflow: "hidden",
                     }}
                   >
-                    {activeStudentDetail.studentCode.split("-").pop()}
+                    {classStudentPhotoUrls[activeStudentDetail.id]?<img src={classStudentPhotoUrls[activeStudentDetail.id]} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:activeStudentDetail.studentCode.split("-").pop()}
                   </div>
                   <div>
                     <h3 style={{ fontSize: "16px", fontWeight: 800, margin: 0 }}>
@@ -1283,13 +1329,11 @@ export function ClassesWorkspace() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="drawer-close-btn"
-                  onClick={() => setActiveStudentDetail(null)}
-                >
-                  <X size={18} />
-                </button>
+                <div className="classes-student-profile-actions">
+                  <label className="btn-secondary"><Camera size={14}/><span>{photoUploading?"Uploading…":"Photo"}</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={photoUploading} onChange={event=>{void uploadClassStudentPhoto(event.target.files?.[0]);event.currentTarget.value=""}}/></label>
+                  <button type="button" className="btn-secondary" onClick={()=>beginClassStudentEdit(activeStudentDetail)}><Pencil size={14}/><span>Edit</span></button>
+                  <button type="button" className="drawer-close-btn" onClick={() => setActiveStudentDetail(null)}><X size={18} /></button>
+                </div>
               </div>
 
               <div style={{ padding: "22px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" }}>
@@ -1372,6 +1416,27 @@ export function ClassesWorkspace() {
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editingClassStudent&&<div className="modal-backdrop-clean" onClick={()=>setEditingClassStudent(null)}><motion.div initial={{opacity:0,scale:.97}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.97}} className="modal-dialog-clean class-student-edit-dialog" onClick={event=>event.stopPropagation()}>
+          <div className="modal-header-clean"><div><small>Class student profile</small><h3>Edit {editingClassStudent.fullName}</h3><p>{editingClassStudent.linkedStudentId?"CRM-linked identity fields are protected; class-specific information remains editable.":"Update personal and contact information for this external class student."}</p></div><button type="button" className="drawer-close-btn" onClick={()=>setEditingClassStudent(null)}><X size={18}/></button></div>
+          <form onSubmit={saveClassStudentEdit}>
+            <div className="class-student-edit-grid">
+              <label>Full name *<input required readOnly={Boolean(editingClassStudent.linkedStudentId)} value={classStudentEditForm.fullName??""} onChange={event=>setClassStudentEditForm({...classStudentEditForm,fullName:event.target.value})}/></label>
+              <label>Phone *<input required readOnly={Boolean(editingClassStudent.linkedStudentId)} value={classStudentEditForm.phone??""} onChange={event=>setClassStudentEditForm({...classStudentEditForm,phone:event.target.value})}/></label>
+              <label>Email<input type="email" readOnly={Boolean(editingClassStudent.linkedStudentId)} value={classStudentEditForm.email??""} onChange={event=>setClassStudentEditForm({...classStudentEditForm,email:event.target.value})}/></label>
+              <label>Gender<select disabled={Boolean(editingClassStudent.linkedStudentId)} value={classStudentEditForm.gender??"Other"} onChange={event=>setClassStudentEditForm({...classStudentEditForm,gender:event.target.value as ClassStudent["gender"]})}><option>Male</option><option>Female</option><option>Other</option></select></label>
+              <label>Education level<input value={classStudentEditForm.educationLevel??""} onChange={event=>setClassStudentEditForm({...classStudentEditForm,educationLevel:event.target.value})}/></label>
+              <label>Record status<select value={classStudentEditForm.recordStatus??"Active"} onChange={event=>setClassStudentEditForm({...classStudentEditForm,recordStatus:event.target.value as ClassStudent["recordStatus"]})}><option>Active</option><option>Completed</option><option>On Hold</option><option>Dropped</option></select></label>
+              <label>Guardian name<input value={classStudentEditForm.guardianName??""} onChange={event=>setClassStudentEditForm({...classStudentEditForm,guardianName:event.target.value})}/></label>
+              <label>Guardian phone<input value={classStudentEditForm.guardianPhone??""} onChange={event=>setClassStudentEditForm({...classStudentEditForm,guardianPhone:event.target.value})}/></label>
+              <label className="wide">Address<textarea readOnly={Boolean(editingClassStudent.linkedStudentId)} value={classStudentEditForm.address??""} onChange={event=>setClassStudentEditForm({...classStudentEditForm,address:event.target.value})}/></label>
+              <label className="wide">Notes<textarea value={classStudentEditForm.notes??""} onChange={event=>setClassStudentEditForm({...classStudentEditForm,notes:event.target.value})}/></label>
+            </div>
+            <div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setEditingClassStudent(null)}>Cancel</button><button type="submit" className="btn-primary">Save changes</button></div>
+          </form>
+        </motion.div></div>}
       </AnimatePresence>
     </div>
   );
