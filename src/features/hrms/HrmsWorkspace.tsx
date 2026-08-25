@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { PhoneInput } from "../../components/ui/PhoneInput";
 import { HrmsService } from "../../services/hrmsService";
+import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
+import { useAuth } from "../auth/AuthProvider";
 
 interface StaffMember {
   id: string;
@@ -102,6 +104,7 @@ const INITIAL_LEAVES: LeaveRequest[] = [];
 const INITIAL_PAYROLL: PayrollRecord[] = [];
 
 export function HrmsWorkspace() {
+  const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab") as "staff" | "attendance" | "leaves" | "payroll" | "performance" | "documents" | null;
 
@@ -185,6 +188,25 @@ export function HrmsWorkspace() {
     days: 1,
     reason: "",
   });
+  const canRequestLeave = Boolean(profile && profile.role !== "ADMIN");
+  const canApproveLeave = profile?.role === "ADMIN" || profile?.role === "DIRECTOR";
+
+  const openLeaveRequest = () => {
+    if (!canRequestLeave) return;
+    const today=new Date().toISOString().slice(0,10);
+    setDataError("");
+    setLeaveForm({empCode:myAttendance?.employeeCode??"",fullName:myAttendance?.fullName??profile?.full_name??"",leaveType:"Casual Leave",fromDate:today,toDate:today,days:1,reason:""});
+    setShowLeaveModal(true);
+  };
+
+  useEffect(()=>{
+    if(searchParams.get("apply")!=="1"||!canRequestLeave||!myAttendance)return;
+    const timer=window.setTimeout(()=>openLeaveRequest(),0);
+    const next=new URLSearchParams(searchParams);next.delete("apply");next.set("tab","leaves");setSearchParams(next,{replace:true});
+    return()=>window.clearTimeout(timer);
+  // open exactly once after the employee profile is available
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[searchParams,myAttendance,canRequestLeave]);
 
   const handleCreateStaff = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,9 +241,15 @@ export function HrmsWorkspace() {
 
   const handleRequestLeave = async (e: React.FormEvent) => {
     e.preventDefault();
-    try { await HrmsService.requestLeave({employee_code:leaveForm.empCode,leave_type:leaveForm.leaveType,from_date:leaveForm.fromDate,to_date:leaveForm.toDate,days:Number(leaveForm.days),reason:leaveForm.reason||"Personal matter"}); await loadHrmsData(); setShowLeaveModal(false); }
-    catch(error){setDataError(error instanceof Error?error.message:"Leave request failed");}
+    if(!canRequestLeave)return;
+    if(!leaveForm.empCode){notifyError("Employee profile unavailable","Ask an administrator to link your login to an active HR employee record.");return}
+    if(!leaveForm.fromDate||!leaveForm.toDate||new Date(leaveForm.toDate)<new Date(leaveForm.fromDate)){notifyError("Invalid leave dates","The end date must be the same as or later than the start date.");return}
+    if(!leaveForm.reason.trim()){notifyError("Reason required","Add a short reason or handover note before submitting.");return}
+    try { await HrmsService.requestLeave({employee_code:leaveForm.empCode,leave_type:leaveForm.leaveType,from_date:leaveForm.fromDate,to_date:leaveForm.toDate,days:Number(leaveForm.days),reason:leaveForm.reason.trim()}); await loadHrmsData(); setShowLeaveModal(false);notifySuccess("Leave request submitted","Management can now review the request in the HRMS approval queue."); }
+    catch(error){const message=error instanceof Error?error.message:"Leave request failed";setDataError(message);notifyError("Leave request failed",message);}
   };
+
+  const updateLeaveDates=(field:"fromDate"|"toDate",value:string)=>setLeaveForm(current=>{const next={...current,[field]:value};const from=new Date(`${next.fromDate}T00:00:00`);const to=new Date(`${next.toDate}T00:00:00`);const days=!Number.isNaN(from.getTime())&&!Number.isNaN(to.getTime())&&to>=from?Math.floor((to.getTime()-from.getTime())/86400000)+1:0;return{...next,days}});
 
   const filteredStaff = staffList.filter(s => {
     const matchesDept = deptFilter === "ALL" || s.department === deptFilter;
@@ -595,14 +623,14 @@ export function HrmsWorkspace() {
               <h3>Staff Leave Management & Approval Queue</h3>
               <p>Formal requests for annual, sick, casual, and festival leaves in Nepal</p>
             </div>
-            <button
+            {canRequestLeave && <button
               type="button"
               className="btn-primary"
-              onClick={() => setShowLeaveModal(true)}
+              onClick={openLeaveRequest}
             >
               <Plus size={15} />
               <span>Apply for Leave</span>
-            </button>
+            </button>}
           </div>
 
           <div className="table-wrapper">
@@ -616,7 +644,7 @@ export function HrmsWorkspace() {
                   <th>Duration</th>
                   <th>Reason & Remarks</th>
                   <th>Status</th>
-                  <th style={{ textAlign: "right", width: "160px" }}>Maker-Checker Action</th>
+                  <th style={{ textAlign: "right", width: "160px" }}>{canApproveLeave?"Approval Action":"Decision"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -646,7 +674,7 @@ export function HrmsWorkspace() {
                       </span>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      {lv.status === "PENDING" ? (
+                      {lv.status === "PENDING" && canApproveLeave ? (
                         <div className="table-actions" style={{ justifyContent: "flex-end" }}>
                           <button
                             type="button"
@@ -979,7 +1007,7 @@ export function HrmsWorkspace() {
       )}
 
       {/* APPLY LEAVE MODAL */}
-      {showLeaveModal && (
+      {showLeaveModal && canRequestLeave && (
         <div className="modal-backdrop-clean" onClick={() => setShowLeaveModal(false)}>
           <div className="modal-dialog-clean" onClick={e => e.stopPropagation()}>
             <div className="modal-header-clean">
@@ -1003,19 +1031,7 @@ export function HrmsWorkspace() {
                 <div className="form-row-2">
                   <div className="form-group">
                     <label>Applicant Staff *</label>
-                    <select
-                      value={`${leaveForm.empCode}|${leaveForm.fullName}`}
-                      onChange={e => {
-                        const [code, name] = e.target.value.split("|");
-                        setLeaveForm({ ...leaveForm, empCode: code, fullName: name });
-                      }}
-                    >
-                      {staffList.map(s => (
-                        <option key={s.id} value={`${s.empCode}|${s.fullName}`}>
-                          {s.fullName} ({s.empCode})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="hrms-self-applicant"><UserCheck size={16}/><div><strong>{leaveForm.fullName||"Employee profile unavailable"}</strong><span>{leaveForm.empCode||"No employee code linked"}</span></div></div>
                   </div>
 
                   <div className="form-group">
@@ -1039,7 +1055,7 @@ export function HrmsWorkspace() {
                       type="date"
                       required
                       value={leaveForm.fromDate}
-                      onChange={e => setLeaveForm({ ...leaveForm, fromDate: e.target.value })}
+                      onChange={e => updateLeaveDates("fromDate",e.target.value)}
                     />
                   </div>
                   <div className="form-group">
@@ -1048,10 +1064,12 @@ export function HrmsWorkspace() {
                       type="date"
                       required
                       value={leaveForm.toDate}
-                      onChange={e => setLeaveForm({ ...leaveForm, toDate: e.target.value })}
+                      onChange={e => updateLeaveDates("toDate",e.target.value)}
                     />
                   </div>
                 </div>
+
+                <div className="hrms-leave-duration"><Calendar size={16}/><span>Requested duration</span><strong>{leaveForm.days||0} {leaveForm.days===1?"day":"days"}</strong></div>
 
                 <div className="form-group">
                   <label>Reason / Handover Notes *</label>

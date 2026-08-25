@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import {
   AlertTriangle,
+  CalendarDays,
   BookOpen,
   Clock,
   CheckCircle2,
@@ -30,6 +31,7 @@ import { supabase } from "../../lib/supabase";
 import { KpiTrendIndicator } from "../../components/common/KpiTrendIndicator";
 import { AECS_ORGANIZATION } from "../../config/organization";
 import { HrmsService } from "../../services/hrmsService";
+import { useAuth } from "../auth/AuthProvider";
 
 // Trend series for 30-day analytics
 const INTAKE_TREND_DATA: Array<{ day: string; leads: number; applications: number }> = [];
@@ -58,6 +60,7 @@ const RECENT_ACTIVITIES: DashboardActivity[] = [];
 
 export function ManagementDashboard() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [totalStudents, setTotalStudents] = useState(0);
   const [summary, setSummary] = useState({ counselling: 0, offers: 0, visaRatio: 0, revenue: 0 });
   const [dashboardError, setDashboardError] = useState("");
@@ -66,6 +69,8 @@ export function ManagementDashboard() {
   const [attendanceLoadError, setAttendanceLoadError] = useState("");
   const [, setAttendanceClock] = useState(0);
   const [myAttendance, setMyAttendance] = useState<Awaited<ReturnType<typeof HrmsService.getMyTodayAttendance>>>(null);
+  const [myLeaves, setMyLeaves] = useState<Awaited<ReturnType<typeof HrmsService.getLeaves>>>([]);
+  const canRequestLeave = Boolean(profile && profile.role !== "ADMIN");
 
   const loadMyAttendance = async () => {
     try { setMyAttendance(await HrmsService.getMyTodayAttendance()); setAttendanceLoadError(""); }
@@ -129,6 +134,7 @@ export function ManagementDashboard() {
   }, []);
 
   useEffect(() => { void loadMyAttendance(); }, []);
+  useEffect(() => { if (canRequestLeave) void HrmsService.getLeaves().then(setMyLeaves).catch(()=>setMyLeaves([])); }, [canRequestLeave]);
   useEffect(() => { const timer=setInterval(() => setAttendanceClock(value => value + 1), 60000); return () => clearInterval(timer); }, []);
 
   const workedToday = myAttendance?.clockIn ? (() => {
@@ -200,8 +206,15 @@ export function ManagementDashboard() {
         <div className="dashboard-attendance-actions">
           <button type="button" className="btn-primary" disabled={attendanceBusy || !myAttendance || Boolean(myAttendance.clockIn)} onClick={() => void punchAttendance("in")}><Clock size={15}/> Clock In</button>
           <button type="button" className="btn-secondary" disabled={attendanceBusy || !myAttendance?.clockIn || Boolean(myAttendance.clockOut)} onClick={() => void punchAttendance("out")}><CheckCircle2 size={15}/> Clock Out</button>
+          {canRequestLeave && <button type="button" className="btn-secondary dashboard-leave-button" onClick={()=>navigate("/hrms?tab=leaves&apply=1")}><CalendarDays size={15}/> Request Leave</button>}
         </div>
       </section>
+
+      {canRequestLeave && <section className="dashboard-leave-strip" aria-label="My leave requests">
+        <div className="dashboard-leave-strip-icon"><CalendarDays size={18}/></div>
+        <div><span>My leave requests</span><strong>{myLeaves.filter(item=>item.status==="PENDING").length} pending</strong><small>{myLeaves.length ? `${myLeaves.filter(item=>item.status==="APPROVED").length} approved · ${myLeaves.filter(item=>item.status==="REJECTED").length} rejected` : "No leave applications submitted yet"}</small></div>
+        <button type="button" className="btn-ghost" onClick={()=>navigate("/hrms?tab=leaves")}><span>View history</span><ChevronRight size={14}/></button>
+      </section>}
 
       {/* Flagship KPI Strip */}
       <div className="metrics-grid-4" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
