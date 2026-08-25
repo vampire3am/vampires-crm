@@ -59,8 +59,9 @@ import { COUNTRY_METADATA } from "../../lib/countryMetadata.generated";
 import { MultiIntakePicker } from "../../components/ui/MultiIntakePicker";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 import { validateDocumentFiles } from "../../lib/documentUploadPolicy";
-import { CounsellingService } from "../../services/counsellingService";
+import { CounsellingService, type CounsellingRecord } from "../../services/counsellingService";
 import { DestinationCatalogService } from "../../services/destinationCatalogService";
+import { StudentService, type StudentDirectoryRecord } from "../../services/studentService";
 import { useAuth } from "../auth/AuthProvider";
 
 export interface DestinationCatalog extends DestinationCountry {
@@ -291,7 +292,11 @@ export function CounsellingDashboard() {
   };
 
   // Student Consultations State
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<CounsellingRecord[]>([]);
+  const [consultationStudents, setConsultationStudents] = useState<StudentDirectoryRecord[]>([]);
+  const [consultationLoading, setConsultationLoading] = useState(true);
+  const [consultationSaving, setConsultationSaving] = useState(false);
+  const [consultationError, setConsultationError] = useState("");
   const [consultForm, setConsultForm] = useState({
     studentCode: "",
     studentName: "",
@@ -304,10 +309,27 @@ export function CounsellingDashboard() {
   });
 
   useEffect(() => {
-    CounsellingService.getRecords().then(data => {
-      if (data && data.length > 0) setRecords(data);
-    });
+    let live = true;
+    Promise.all([CounsellingService.getRecords(), StudentService.getStudents()])
+      .then(([savedRecords, students]) => {
+        if (!live) return;
+        setRecords(savedRecords);
+        setConsultationStudents(students);
+        setConsultationError("");
+      })
+      .catch(error => {
+        if (!live) return;
+        setConsultationError(error instanceof Error ? error.message : "Unable to load consultation records.");
+      })
+      .finally(() => { if (live) setConsultationLoading(false); });
+    return () => { live = false; };
   }, []);
+
+  useEffect(() => {
+    if (!consultForm.targetCountry && destinations[0]?.name) {
+      setConsultForm(current => ({ ...current, targetCountry: destinations[0].name }));
+    }
+  }, [destinations, consultForm.targetCountry]);
 
   // Save to local storage whenever modified
   const saveDestinations = (updated: DestinationCatalog[]) => {
@@ -590,23 +612,38 @@ export function CounsellingDashboard() {
 
   const handleSaveConsultation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!consultForm.notes.trim()) return;
-
-    await CounsellingService.createRecord({
-      studentName: consultForm.studentName,
-      studentCode: consultForm.studentCode,
-      counsellorName: consultForm.counsellorName,
-      consultationDate: "Today, Just now",
-      targetCountry: consultForm.targetCountry,
-      preferredCourse: consultForm.preferredCourse,
-      stageOutcome: consultForm.stageOutcome as any,
-      followUpDate: consultForm.followUpDate,
-      notes: consultForm.notes,
-    });
-
-    const updated = await CounsellingService.getRecords();
-    setRecords(updated);
-    setConsultForm({ ...consultForm, notes: "" });
+    if (!consultForm.studentCode) {
+      notifyError("Student required", "Select a registered CRM student before saving this consultation.");
+      return;
+    }
+    if (!consultForm.targetCountry || !consultForm.notes.trim()) {
+      notifyError("Required details missing", "Choose a destination and enter the consultation notes.");
+      return;
+    }
+    setConsultationSaving(true);
+    setConsultationError("");
+    try {
+      await CounsellingService.createRecord({
+        studentName: consultForm.studentName,
+        studentCode: consultForm.studentCode,
+        counsellorName: consultForm.counsellorName,
+        consultationDate: "Today, Just now",
+        targetCountry: consultForm.targetCountry,
+        preferredCourse: consultForm.preferredCourse.trim(),
+        stageOutcome: consultForm.stageOutcome as CounsellingRecord["stageOutcome"],
+        followUpDate: consultForm.followUpDate,
+        notes: consultForm.notes.trim(),
+      });
+      setRecords(await CounsellingService.getRecords());
+      setConsultForm(current => ({ ...current, studentCode: "", studentName: "", preferredCourse: "", followUpDate: "", notes: "" }));
+      notifySuccess("Consultation saved", "The guidance record is now available in the student's consultation history.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The consultation could not be saved.";
+      setConsultationError(message);
+      notifyError("Unable to save consultation", message);
+    } finally {
+      setConsultationSaving(false);
+    }
   };
 
   // Filtered destination cards
@@ -1127,7 +1164,7 @@ export function CounsellingDashboard() {
           TAB 3: STUDENT CONSULTATION & ADVISORY LOGS
           ========================================================================= */}
       {activeTab === "consultations" && (
-        <div className="grid-2col" style={{ gridTemplateColumns: "1fr 1.3fr", gap: "20px" }}>
+        <div className="grid-2col consultation-workspace">
           {/* Left: Log Guidance Form */}
           <div className="crm-panel">
             <div className="panel-header-bar">
@@ -1139,16 +1176,22 @@ export function CounsellingDashboard() {
             </div>
 
             <div className="panel-body">
-              <form onSubmit={handleSaveConsultation} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <form onSubmit={handleSaveConsultation} className="consultation-form">
                 <div className="form-group">
-                  <label>Candidate Name *</label>
-                  <input
-                    type="text"
+                  <label>Registered Student *</label>
+                  <select
                     required
-                    value={consultForm.studentName}
-                    onChange={e => setConsultForm({ ...consultForm, studentName: e.target.value })}
-                    placeholder="e.g. Riya Sharma"
-                  />
+                    value={consultForm.studentCode}
+                    disabled={consultationLoading}
+                    onChange={e => {
+                      const student = consultationStudents.find(item => item.student_code === e.target.value);
+                      setConsultForm(current => ({ ...current, studentCode: student?.student_code ?? "", studentName: student?.fullName ?? "", targetCountry: student?.targetCountry && student.targetCountry !== "Undecided" ? student.targetCountry : current.targetCountry, preferredCourse: student?.targetCourse && student.targetCourse !== "Undecided" ? student.targetCourse : "" }));
+                    }}
+                  >
+                    <option value="">{consultationLoading ? "Loading registered students…" : "Select student by name or AECS code"}</option>
+                    {consultationStudents.map(student => <option key={student.id} value={student.student_code}>{student.fullName} · {student.student_code}</option>)}
+                  </select>
+                  {consultForm.studentCode && <div className="consultation-student-summary"><span>{consultForm.studentName.slice(0, 1).toUpperCase()}</span><div><strong>{consultForm.studentName}</strong><small>{consultForm.studentCode}</small></div><CheckCircle2 size={17}/></div>}
                 </div>
 
                 <div className="form-row-2">
@@ -1180,6 +1223,17 @@ export function CounsellingDashboard() {
                   </div>
                 </div>
 
+                <div className="form-row-2">
+                  <div className="form-group">
+                    <label>Preferred Course</label>
+                    <input value={consultForm.preferredCourse} onChange={e => setConsultForm({ ...consultForm, preferredCourse: e.target.value })} placeholder="e.g. MSc Data Science" />
+                  </div>
+                  <div className="form-group">
+                    <label>Follow-up Date</label>
+                    <input type="date" min={new Date().toISOString().slice(0, 10)} value={consultForm.followUpDate} onChange={e => setConsultForm({ ...consultForm, followUpDate: e.target.value })} />
+                  </div>
+                </div>
+
                 <div className="form-group">
                   <label>Consultation Notes & Remarks *</label>
                   <textarea
@@ -1191,9 +1245,10 @@ export function CounsellingDashboard() {
                   />
                 </div>
 
-                <button type="submit" className="btn-primary">
+                {consultationError && <div className="consultation-inline-error"><AlertCircle size={15}/><span>{consultationError}</span></div>}
+                <button type="submit" className="btn-primary" disabled={consultationSaving || consultationLoading}>
                   <UserCheck size={15} />
-                  <span>Save Consultation Note</span>
+                  <span>{consultationSaving ? "Saving consultation…" : "Save Consultation Note"}</span>
                 </button>
               </form>
             </div>
@@ -1208,37 +1263,15 @@ export function CounsellingDashboard() {
               </div>
             </div>
 
-            <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: "12px", maxHeight: "560px", overflowY: "auto" }}>
-              {records.map((r: any) => (
-                <div
-                  key={r.id}
-                  style={{
-                    padding: "14px",
-                    borderRadius: "var(--radius-sm)",
-                    background: "var(--bg-card-subtle)",
-                    border: "1px solid var(--border-subtle)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div>
-                      <strong style={{ fontSize: "13px" }}>{r.studentName}</strong>
-                      <span className="account-code-cell" style={{ marginLeft: "8px" }}>{r.studentCode}</span>
-                    </div>
-                    <span className="badge-status enrolled">{r.stageOutcome || "Completed"}</span>
-                  </div>
-
-                  <p style={{ fontSize: "12px", color: "var(--text-main)", background: "var(--bg-card)", padding: "8px 10px", borderRadius: "4px", margin: 0 }}>
-                    {r.notes}
-                  </p>
-
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--text-muted)" }}>
-                    <span>Target: <strong><CountryDisplay country={r.targetCountry} size={14}/></strong></span>
-                    <span>Counsellor: <strong>{r.counsellorName || "Unassigned"}</strong></span>
-                  </div>
-                </div>
+            <div className="consultation-history">
+              {!consultationLoading && records.length === 0 && <div className="consultation-empty"><div><MessageSquare size={22}/></div><strong>No consultations recorded yet</strong><span>Select a registered student and save the first advisory session. New records will appear here immediately.</span></div>}
+              {records.map(r => (
+                <article key={r.id} className="consultation-record">
+                  <header><div className="consultation-avatar">{r.studentName.slice(0, 1).toUpperCase()}</div><div className="consultation-identity"><strong>{r.studentName}</strong><span>{r.studentCode} · {r.consultationDate}</span></div><span className="badge-status enrolled">{r.stageOutcome || "Completed"}</span></header>
+                  <p>{r.notes}</p>
+                  <div className="consultation-meta"><span><Globe size={14}/><CountryDisplay country={r.targetCountry || "Not selected"} size={14}/></span>{r.preferredCourse && <span><BookOpen size={14}/>{r.preferredCourse}</span>}{r.followUpDate && <span><CalendarClock size={14}/>Follow-up {r.followUpDate}</span>}</div>
+                  <footer><span>Recorded by</span><strong>{r.counsellorName || "Unassigned staff"}</strong></footer>
+                </article>
               ))}
             </div>
           </div>
