@@ -25,6 +25,7 @@ import {
   TrendingUp,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
@@ -32,6 +33,7 @@ import { KpiTrendIndicator } from "../../components/common/KpiTrendIndicator";
 import { AECS_ORGANIZATION } from "../../config/organization";
 import { HrmsService } from "../../services/hrmsService";
 import { useAuth } from "../auth/AuthProvider";
+import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 
 // Trend series for 30-day analytics
 const INTAKE_TREND_DATA: Array<{ day: string; leads: number; applications: number }> = [];
@@ -55,6 +57,11 @@ interface DashboardActivity {
   user: string;
 }
 
+interface DashboardLeave {
+  id: string;
+  status: string;
+}
+
 const TODAY_APPOINTMENTS: DashboardAppointment[] = [];
 const RECENT_ACTIVITIES: DashboardActivity[] = [];
 
@@ -69,8 +76,44 @@ export function ManagementDashboard() {
   const [attendanceLoadError, setAttendanceLoadError] = useState("");
   const [, setAttendanceClock] = useState(0);
   const [myAttendance, setMyAttendance] = useState<Awaited<ReturnType<typeof HrmsService.getMyTodayAttendance>>>(null);
-  const [myLeaves, setMyLeaves] = useState<Awaited<ReturnType<typeof HrmsService.getLeaves>>>([]);
+  const [myLeaves, setMyLeaves] = useState<DashboardLeave[]>([]);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
+  const [leaveForm, setLeaveForm] = useState({ leaveType: "Casual Leave", fromDate: "", toDate: "", days: 0, reason: "" });
   const canRequestLeave = Boolean(profile && profile.role !== "ADMIN");
+
+  const loadMyLeaves = async () => {
+    if (!canRequestLeave) return;
+    try { setMyLeaves(await HrmsService.getMyLeaves() as DashboardLeave[]); } catch { setMyLeaves([]); }
+  };
+
+  const openLeaveModal = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setLeaveForm({ leaveType: "Casual Leave", fromDate: today, toDate: today, days: 1, reason: "" });
+    setShowLeaveModal(true);
+  };
+
+  const updateLeaveDate = (field: "fromDate" | "toDate", value: string) => setLeaveForm(current => {
+    const next = { ...current, [field]: value };
+    const from = new Date(`${next.fromDate}T00:00:00`);
+    const to = new Date(`${next.toDate}T00:00:00`);
+    const days = !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && to >= from ? Math.floor((to.getTime() - from.getTime()) / 86400000) + 1 : 0;
+    return { ...next, days };
+  });
+
+  const submitLeaveRequest = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!leaveForm.days) return notifyError("Check the leave dates", "The end date cannot be before the start date.");
+    if (!leaveForm.reason.trim()) return notifyError("Reason required", "Add a short reason or handover note before submitting.");
+    setLeaveSubmitting(true);
+    try {
+      await HrmsService.requestLeave({ leave_type: leaveForm.leaveType, from_date: leaveForm.fromDate, to_date: leaveForm.toDate, reason: leaveForm.reason.trim() });
+      await loadMyLeaves();
+      setShowLeaveModal(false);
+      notifySuccess("Leave request submitted", "Your request is now in the HRMS approval queue for HR or management.");
+    } catch (error) { notifyError("Leave request failed", error instanceof Error ? error.message : "The request could not be submitted."); }
+    finally { setLeaveSubmitting(false); }
+  };
 
   const loadMyAttendance = async () => {
     try { setMyAttendance(await HrmsService.getMyTodayAttendance()); setAttendanceLoadError(""); }
@@ -134,7 +177,7 @@ export function ManagementDashboard() {
   }, []);
 
   useEffect(() => { void loadMyAttendance(); }, []);
-  useEffect(() => { if (canRequestLeave) void HrmsService.getLeaves().then(setMyLeaves).catch(()=>setMyLeaves([])); }, [canRequestLeave]);
+  useEffect(() => { void loadMyLeaves(); }, [canRequestLeave]);
   useEffect(() => { const timer=setInterval(() => setAttendanceClock(value => value + 1), 60000); return () => clearInterval(timer); }, []);
 
   const workedToday = myAttendance?.clockIn ? (() => {
@@ -206,15 +249,31 @@ export function ManagementDashboard() {
         <div className="dashboard-attendance-actions">
           <button type="button" className="btn-primary" disabled={attendanceBusy || !myAttendance || Boolean(myAttendance.clockIn)} onClick={() => void punchAttendance("in")}><Clock size={15}/> Clock In</button>
           <button type="button" className="btn-secondary" disabled={attendanceBusy || !myAttendance?.clockIn || Boolean(myAttendance.clockOut)} onClick={() => void punchAttendance("out")}><CheckCircle2 size={15}/> Clock Out</button>
-          {canRequestLeave && <button type="button" className="btn-secondary dashboard-leave-button" onClick={()=>navigate("/hrms?tab=leaves&apply=1")}><CalendarDays size={15}/> Request Leave</button>}
+          {canRequestLeave && <button type="button" className="btn-secondary dashboard-leave-button" onClick={openLeaveModal}><CalendarDays size={15}/> Request Leave</button>}
         </div>
       </section>
 
       {canRequestLeave && <section className="dashboard-leave-strip" aria-label="My leave requests">
         <div className="dashboard-leave-strip-icon"><CalendarDays size={18}/></div>
         <div><span>My leave requests</span><strong>{myLeaves.filter(item=>item.status==="PENDING").length} pending</strong><small>{myLeaves.length ? `${myLeaves.filter(item=>item.status==="APPROVED").length} approved · ${myLeaves.filter(item=>item.status==="REJECTED").length} rejected` : "No leave applications submitted yet"}</small></div>
-        <button type="button" className="btn-ghost" onClick={()=>navigate("/hrms?tab=leaves")}><span>View history</span><ChevronRight size={14}/></button>
+        <button type="button" className="btn-ghost" onClick={()=>void loadMyLeaves()}><span>Refresh status</span><ChevronRight size={14}/></button>
       </section>}
+
+      {showLeaveModal && canRequestLeave && <div className="modal-backdrop-clean" onClick={()=>setShowLeaveModal(false)}>
+        <div className="modal-dialog-clean dashboard-leave-modal" onClick={event=>event.stopPropagation()}>
+          <div className="modal-header-clean"><div><span className="page-category-eyebrow">Staff self-service</span><h3>Request leave</h3><p>Your application goes directly to the HRMS approval queue.</p></div><button type="button" className="drawer-close-btn" onClick={()=>setShowLeaveModal(false)} aria-label="Close leave request"><X size={18}/></button></div>
+          <form onSubmit={submitLeaveRequest}>
+            <div className="modal-body-clean">
+              <div className="hrms-self-applicant"><CalendarDays size={17}/><div><strong>{myAttendance?.fullName || profile?.full_name || "Staff member"}</strong><span>{myAttendance?.employeeCode || "Linked employee profile"}</span></div></div>
+              <div className="form-group"><label>Leave category *</label><select required value={leaveForm.leaveType} onChange={event=>setLeaveForm({...leaveForm,leaveType:event.target.value})}><option>Annual Leave</option><option>Casual Leave</option><option>Sick / Medical</option><option>Maternity / Paternity</option><option>Festival Leave</option></select></div>
+              <div className="form-row-2"><div className="form-group"><label>From date *</label><input type="date" required value={leaveForm.fromDate} onChange={event=>updateLeaveDate("fromDate",event.target.value)}/></div><div className="form-group"><label>To date *</label><input type="date" required min={leaveForm.fromDate} value={leaveForm.toDate} onChange={event=>updateLeaveDate("toDate",event.target.value)}/></div></div>
+              <div className="hrms-leave-duration"><CalendarDays size={16}/><span>Requested duration</span><strong>{leaveForm.days} {leaveForm.days===1?"day":"days"}</strong></div>
+              <div className="form-group"><label>Reason / handover notes *</label><textarea required rows={4} value={leaveForm.reason} onChange={event=>setLeaveForm({...leaveForm,reason:event.target.value})} placeholder="Explain the reason and any work that needs handing over…"/></div>
+            </div>
+            <div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setShowLeaveModal(false)}>Cancel</button><button type="submit" className="btn-primary" disabled={leaveSubmitting}>{leaveSubmitting?"Submitting…":"Submit request"}</button></div>
+          </form>
+        </div>
+      </div>}
 
       {/* Flagship KPI Strip */}
       <div className="metrics-grid-4" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
