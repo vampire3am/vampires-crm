@@ -54,6 +54,7 @@ import { useNavigate } from "react-router-dom";
 import { CountryFlag } from "../../components/ui/PhoneInput";
 import { CountryDisplay } from "../../components/ui/CountryDisplay";
 import { CountrySelect } from "../../components/ui/CountrySelect";
+import { StudentSelect } from "../../components/ui/StudentSelect";
 import { AECS_AUTHORIZED_COUNTRIES, DestinationCountry } from "../../lib/destinationsData";
 import { COUNTRY_METADATA } from "../../lib/countryMetadata.generated";
 import { MultiIntakePicker } from "../../components/ui/MultiIntakePicker";
@@ -1165,8 +1166,12 @@ export function CounsellingDashboard() {
           ========================================================================= */}
       {activeTab === "consultations" && (
         <div className="grid-2col consultation-workspace">
+          <div className="consultation-overview">
+            <div><span className="consultation-overview-icon"><MessageSquarePlus size={20}/></span><div><small>STUDENT GUIDANCE</small><h2>Consultation workspace</h2><p>Record advice, decisions and the next accountable follow-up in one place.</p></div></div>
+            <div className="consultation-overview-stats"><span><strong>{consultationStudents.length}</strong><small>Registered students</small></span><span><strong>{records.length}</strong><small>Sessions recorded</small></span><span><strong>{records.filter(record => record.followUpDate).length}</strong><small>Follow-ups planned</small></span></div>
+          </div>
           {/* Left: Log Guidance Form */}
-          <div className="crm-panel">
+          <div className="crm-panel consultation-entry-panel">
             <div className="panel-header-bar">
               <div>
                 <h3>Log Student Consultation</h3>
@@ -1179,34 +1184,20 @@ export function CounsellingDashboard() {
               <form onSubmit={handleSaveConsultation} className="consultation-form">
                 <div className="form-group">
                   <label>Registered Student *</label>
-                  <select
-                    required
+                  <StudentSelect
+                    students={consultationStudents}
                     value={consultForm.studentCode}
-                    disabled={consultationLoading}
-                    onChange={e => {
-                      const student = consultationStudents.find(item => item.student_code === e.target.value);
+                    loading={consultationLoading}
+                    onChange={student => {
                       setConsultForm(current => ({ ...current, studentCode: student?.student_code ?? "", studentName: student?.fullName ?? "", targetCountry: student?.targetCountry && student.targetCountry !== "Undecided" ? student.targetCountry : current.targetCountry, preferredCourse: student?.targetCourse && student.targetCourse !== "Undecided" ? student.targetCourse : "" }));
                     }}
-                  >
-                    <option value="">{consultationLoading ? "Loading registered students…" : "Select student by name or AECS code"}</option>
-                    {consultationStudents.map(student => <option key={student.id} value={student.student_code}>{student.fullName} · {student.student_code}</option>)}
-                  </select>
-                  {consultForm.studentCode && <div className="consultation-student-summary"><span>{consultForm.studentName.slice(0, 1).toUpperCase()}</span><div><strong>{consultForm.studentName}</strong><small>{consultForm.studentCode}</small></div><CheckCircle2 size={17}/></div>}
+                  />
                 </div>
 
                 <div className="form-row-2">
                   <div className="form-group">
                     <label>Target Country *</label>
-                    <select
-                      value={consultForm.targetCountry}
-                      onChange={e => setConsultForm({ ...consultForm, targetCountry: e.target.value })}
-                    >
-                      {destinations.map(c => (
-                        <option key={c.code} value={c.name}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                    <CountrySelect countries={destinations} value={consultForm.targetCountry} onChange={targetCountry => setConsultForm({ ...consultForm, targetCountry })} placeholder="Select target destination" />
                   </div>
 
                   <div className="form-group">
@@ -1255,12 +1246,13 @@ export function CounsellingDashboard() {
           </div>
 
           {/* Right: Consultation History Log */}
-          <div className="crm-panel">
+          <div className="crm-panel consultation-history-panel">
             <div className="panel-header-bar">
               <div>
                 <h3>Recent Consultation Records</h3>
                 <p>Auditable log of counsellor-student guidance sessions</p>
               </div>
+              <span className="consultation-record-count">{records.length} records</span>
             </div>
 
             <div className="consultation-history">
