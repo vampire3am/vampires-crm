@@ -75,7 +75,6 @@ import {
   type ChatAttachment,
   type ChatChannel,
   type ChatMessage,
-  markMessagesRead,
   MessagingService,
   type StaffUser,
 } from "../../services/messagingService";
@@ -175,7 +174,7 @@ export function MessagesWorkspace() {
       setLoadError("");
       const [msgs,staff,availableChannels] = await Promise.all([MessagingService.getMessages(),MessagingService.getStaff(),MessagingService.getChannels()]);
       setMessages(msgs);
-      markMessagesRead(msgs, currentUserId);
+      await MessagingService.markAllRead();
       setStaffUsers(staff);
       setChannels(availableChannels);
       const studs = await StudentService.getStudents();

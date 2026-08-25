@@ -54,37 +54,6 @@ export interface ChatChannel {
   unreadCount?: number;
 }
 
-const messageReadStorageKey = (staffId: string) => `aecs_read_message_ids_${staffId}`;
-
-function getReadMessageIds(staffId: string): Set<string> {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(messageReadStorageKey(staffId)) ?? "[]") as string[]);
-  } catch {
-    return new Set();
-  }
-}
-
-export function getUnreadMessages(messages: ChatMessage[], staffId: string) {
-  const readIds = getReadMessageIds(staffId);
-  return messages.filter(message => {
-    if (message.senderId === staffId || readIds.has(message.id)) return false;
-    return message.channelId != null || message.recipientId === staffId;
-  });
-}
-
-export function markMessagesRead(messages: ChatMessage[], staffId: string) {
-  const readIds = getReadMessageIds(staffId);
-  const previousSize = readIds.size;
-  for (const message of messages) {
-    if (message.senderId !== staffId && (message.channelId != null || message.recipientId === staffId)) {
-      readIds.add(message.id);
-    }
-  }
-  if (readIds.size === previousSize) return;
-  localStorage.setItem(messageReadStorageKey(staffId), JSON.stringify([...readIds].slice(-2000)));
-  window.dispatchEvent(new CustomEvent("aecs:message-read-state"));
-}
-
 // Staff are loaded exclusively from authenticated Supabase staff profiles.
 export const AECS_STAFF_18: StaffUser[] = [];
 
@@ -153,6 +122,8 @@ export const AECS_CHANNELS: ChatChannel[] = [
 ];
 
 export const MessagingService = {
+  getUnreadCount: async ():Promise<number> => {const{data,error}=await supabase.rpc("get_unread_message_count");if(error)throw error;return Number(data??0)},
+  markAllRead: async ():Promise<void> => {const{error}=await supabase.rpc("mark_all_messages_read");if(error)throw error;window.dispatchEvent(new CustomEvent("aecs:message-read-state"))},
   getStaff: async ():Promise<StaffUser[]> => {const{data,error}=await supabase.from("staff_profiles").select("id,full_name,email,role,department,phone,avatar_bg").eq("is_active",true).order("full_name");if(error)throw error;return(data??[]).map(s=>({id:String(s.id),fullName:s.full_name?.trim()||"Staff member",email:s.email?.trim()||"",role:s.role?.trim()||"Staff",department:(s.department?.trim()||"IT & Operations")as StaffUser["department"],presence:"OFFLINE",avatarBg:s.avatar_bg||"#F97316",phone:s.phone??undefined}))},
   getChannels: async ():Promise<ChatChannel[]> => {const{data,error}=await supabase.from("communication_channels").select("id,name,description,category,is_private,communication_channel_members(count)").order("name");if(error)throw error;return(data??[]).map(c=>({id:c.id,name:c.name,description:c.description??"",topic:c.description??"",category:c.category==="BROADCAST"?"Broadcast":c.category==="CASE"?"Admissions":"Department",iconName:c.category==="BROADCAST"?"Megaphone":"Users",isPrivate:c.is_private,memberCount:c.communication_channel_members?.[0]?.count??0,unreadCount:0}))},
   getMessages: async (): Promise<ChatMessage[]> => {

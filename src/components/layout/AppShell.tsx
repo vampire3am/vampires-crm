@@ -40,7 +40,7 @@ import { useAuth } from "../../features/auth/AuthProvider";
 import { ScreenBreakReminder } from "../wellness/ScreenBreakReminder";
 import { GlobalMessageNotifier } from "../common/GlobalMessageNotifier";
 import { IncomingCallToast } from "../calling/IncomingCallToast";
-import { getUnreadMessages, markMessagesRead, MessagingService } from "../../services/messagingService";
+import { MessagingService } from "../../services/messagingService";
 
 const SEARCH_ITEMS = [
   { label: "Dashboard Overview", detail: "Kathmandu Hub operations snapshot", to: "/dashboard", icon: LayoutDashboard },
@@ -83,13 +83,14 @@ export function AppShell() {
 
     const refreshUnreadMessages = async () => {
       try {
-        const messages = await MessagingService.getMessages();
-        if (!active) return;
         if (location.pathname.startsWith("/messages")) {
-          markMessagesRead(messages, currentStaffId);
+          await MessagingService.markAllRead();
+          if (!active) return;
           setUnreadMessageCount(0);
         } else {
-          setUnreadMessageCount(getUnreadMessages(messages, currentStaffId).length);
+          const count=await MessagingService.getUnreadCount();
+          if (!active) return;
+          setUnreadMessageCount(count);
         }
       } catch {
         if (active) setUnreadMessageCount(0);
