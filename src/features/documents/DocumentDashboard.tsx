@@ -31,6 +31,7 @@ const DOCUMENT_CATEGORIES = [
   "Financial Documents",
   "Visa & Embassy Files",
   "Recommendation Letters",
+  "B2B Agreements",
   "Others",
 ] as const;
 

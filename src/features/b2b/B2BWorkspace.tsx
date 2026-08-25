@@ -52,6 +52,9 @@ import { CountryDisplay } from "../../components/ui/CountryDisplay";
 import { COUNTRY_METADATA } from "../../lib/countryMetadata.generated";
 import { B2BPartner, B2BService } from "../../services/b2bService";
 import { useAuth } from "../auth/AuthProvider";
+import { DocumentService } from "../../services/documentService";
+import { validateDocumentFiles } from "../../lib/documentUploadPolicy";
+import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 
 type FilterTab = "All partners" | "Active" | "In progress" | "Follow-ups" | "Inactive";
 
@@ -78,6 +81,21 @@ export function B2BWorkspace() {
   const [interactionSuccess, setInteractionSuccess] = useState("");
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
+  const [uploadingAgreement, setUploadingAgreement] = useState(false);
+
+  const uploadPartnerAgreements = async (files: FileList | null) => {
+    if (!activePartnerDetail || !files?.length) return;
+    const selected = Array.from(files);
+    if (!validateDocumentFiles(selected)) return;
+    setUploadingAgreement(true);
+    try {
+      const results = await Promise.allSettled(selected.map(file => DocumentService.uploadB2B({ partnerId: activePartnerDetail.id, partnerCode: activePartnerDetail.code, partnerName: activePartnerDetail.name, file, expiresOn: activePartnerDetail.agreementExpiry })));
+      const failed = results.filter(result => result.status === "rejected").length;
+      if (failed) throw new Error(`${selected.length-failed} uploaded; ${failed} failed.`);
+      notifySuccess(`${selected.length} agreement${selected.length===1?"":"s"} uploaded`, "The files are now available in the central Document Vault under B2B Agreements.");
+    } catch (error) { notifyError("Agreement upload failed", error instanceof Error ? error.message : "Unable to upload the selected files."); }
+    finally { setUploadingAgreement(false); }
+  };
 
   // Add Partner Form State
   const [partnerForm, setPartnerForm] = useState({
@@ -1075,6 +1093,13 @@ export function B2BWorkspace() {
                       accept="image/png,image/jpeg,image/webp,image/gif"
                       onChange={event => updateActivePartnerPhoto(event.target.files?.[0])}
                     />
+                  </label>
+                </div>
+                <div className="partner-photo-management">
+                  <div><strong>Agreements & MOU documents</strong><span>Upload signed agreements to the central Document Vault. Multiple files supported.</span></div>
+                  <label className="partner-photo-select">
+                    <FileText size={14}/><span>{uploadingAgreement?"Uploading…":"Upload documents"}</span>
+                    <input type="file" multiple disabled={uploadingAgreement} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" onChange={event=>{void uploadPartnerAgreements(event.target.files);event.currentTarget.value=""}}/>
                   </label>
                 </div>
                 {/* 3 KPIs */}
