@@ -67,6 +67,8 @@ export function MockTestsWorkspace() {
   const [showAddResultModal, setShowAddResultModal] = useState(false);
   const [showAddSlotModal, setShowAddSlotModal] = useState(false);
   const [activeResultDetail, setActiveResultDetail] = useState<MockTestResult | null>(null);
+  const [bookingSlot,setBookingSlot]=useState<MockTestSlot|null>(null);
+  const [bookingStudentId,setBookingStudentId]=useState("");
 
   // Score Entry Form
   const [scoreForm, setScoreForm] = useState({
@@ -111,7 +113,7 @@ export function MockTestsWorkspace() {
   };
 
   useEffect(() => {
-    loadData();
+    void loadData().catch(error=>setFormError(error instanceof Error?error.message:"Unable to load mock-test workspace."));
   }, []);
 
   // Filtered results
@@ -135,7 +137,7 @@ export function MockTestsWorkspace() {
   // Handle Score Submit
   const handleSaveResult = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!scoreForm.studentCode || !scoreForm.testDate || !scoreForm.overallScore.trim()) { setFormError("Select a class student and enter the required evaluation details."); return; }
+    if (!scoreForm.studentCode || !scoreForm.testDate || !scoreForm.overallScore.trim() || !scoreForm.examiner.trim() || !scoreForm.venue.trim() || !scoreForm.examinerFeedback.trim() || !scoreForm.listening || !scoreForm.reading || !scoreForm.writing || !scoreForm.speaking) { setFormError("Select a student and complete all required evaluation fields."); return; }
     setSaving(true); setFormError("");
     try { await MockTestService.createResult({
       studentName: scoreForm.studentName.trim(),
@@ -175,6 +177,8 @@ export function MockTestsWorkspace() {
     finally { setSaving(false); }
   };
 
+  const handleBookCandidate=async(event:React.FormEvent)=>{event.preventDefault();if(!bookingSlot||!bookingStudentId){setFormError("Select a class student for this mock-test slot.");return}setSaving(true);setFormError("");try{await MockTestService.bookCandidate(bookingSlot.id,bookingStudentId);await loadData();setBookingSlot(null);setBookingStudentId("");setSuccessMessage("Candidate booked into the mock-test session successfully.")}catch(error){setFormError(error instanceof Error?error.message:"Unable to book candidate")}finally{setSaving(false)}};
+
   // Handle Slot Submit
   const handleSaveSlot = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,7 +211,7 @@ export function MockTestsWorkspace() {
   const averageScore = totalMocks ? (results.reduce((sum, result) => sum + (Number.parseFloat(result.overallScore) || 0), 0) / totalMocks).toFixed(1) : "—";
 
   return (
-    <div className="page-container">
+    <div className="page-container mock-tests-workspace">
       {/* 1. Header Row */}
       <div className="page-header-row">
         <div className="page-header-titles">
@@ -546,6 +550,7 @@ export function MockTestsWorkspace() {
                   className="btn-primary"
                   style={{ width: "100%", marginTop: "auto", fontSize: "12px" }}
                   disabled={slot.status === "FULL"}
+                  onClick={()=>{setBookingSlot(slot);setBookingStudentId("")}}
                 >
                   <UserPlus size={13} />
                   <span>{slot.status === "FULL" ? "Slot Full" : "Book Candidate Slot"}</span>
@@ -634,11 +639,10 @@ export function MockTestsWorkspace() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="modal-dialog-clean"
-              style={{ maxWidth: "600px" }}
+              className="modal-dialog-clean mock-result-dialog"
               onClick={e => e.stopPropagation()}
             >
-              <div className="modal-header-clean">
+              <div className="modal-header-clean mock-result-dialog-header">
                 <div>
                   <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
                     Log Mock Test Evaluation Scores
@@ -657,7 +661,7 @@ export function MockTestsWorkspace() {
               </div>
 
               <form onSubmit={handleSaveResult}>
-                <div className="modal-body-clean">
+                <div className="modal-body-clean mock-result-dialog-body">
                   <div className="form-row-2">
                     <div className="form-group">
                       <label>Class student *</label>
@@ -699,7 +703,7 @@ export function MockTestsWorkspace() {
                   </div>
 
                   {/* 4 Sectional Inputs */}
-                  <div
+                  <div className="mock-sectional-card"
                     style={{
                       background: "var(--bg-card-subtle)",
                       border: "1px solid var(--border-subtle)",
@@ -711,7 +715,7 @@ export function MockTestsWorkspace() {
                     <strong style={{ fontSize: "12.5px", display: "block", marginBottom: "8px" }}>
                       Sectional Scores Breakdown
                     </strong>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+                    <div className="mock-sectional-grid">
                       <div className="form-group">
                         <label>Listening</label>
                         <input
@@ -778,6 +782,11 @@ export function MockTestsWorkspace() {
                     </div>
                   </div>
 
+                  <div className="form-row-2">
+                    <div className="form-group"><label>Venue / Test Centre *</label><input required value={scoreForm.venue} onChange={event=>setScoreForm({...scoreForm,venue:event.target.value})} placeholder="AECS Test Centre · Room 2"/></div>
+                    <div className="form-group"><label>Result status *</label><select value={scoreForm.status} onChange={event=>setScoreForm({...scoreForm,status:event.target.value as MockTestResult["status"]})}><option>Score Issued</option><option>Pending Evaluation</option><option>Absent</option><option>Scheduled</option></select></div>
+                  </div>
+
                   <div className="form-group">
                     <label>Examiner Feedback & Action Plan *</label>
                     <textarea
@@ -788,6 +797,7 @@ export function MockTestsWorkspace() {
                       placeholder="Identify modules needing improvement and provide exam readiness assessment…"
                     />
                   </div>
+                  <label className="mock-target-check"><input type="checkbox" checked={scoreForm.targetAchieved} onChange={event=>setScoreForm({...scoreForm,targetAchieved:event.target.checked})}/><span><strong>Target score achieved</strong><small>Mark the candidate as exam-ready for this test format.</small></span></label>
                 </div>
 
                 <div className="modal-footer-clean">
@@ -807,6 +817,10 @@ export function MockTestsWorkspace() {
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {bookingSlot&&<div className="modal-backdrop-clean" onClick={()=>setBookingSlot(null)}><motion.div initial={{opacity:0,scale:.97}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.97}} className="modal-dialog-clean mock-booking-dialog" onClick={event=>event.stopPropagation()}><div className="modal-header-clean"><div><small>Candidate booking</small><h3>{bookingSlot.title}</h3><p>{bookingSlot.date} · {bookingSlot.time} · {bookingSlot.room}</p></div><button type="button" className="drawer-close-btn" onClick={()=>setBookingSlot(null)}><X size={18}/></button></div><form onSubmit={handleBookCandidate}><div className="modal-body-clean"><div className="mock-booking-capacity"><Users size={17}/><span>{bookingSlot.bookedSeats} of {bookingSlot.totalSeats} seats booked</span></div><div className="form-group"><label>Class student *</label><select required value={bookingStudentId} onChange={event=>setBookingStudentId(event.target.value)}><option value="">Select student by name or code</option>{classStudents.map(student=><option key={student.id} value={student.id}>{student.studentCode} · {student.fullName} · {student.enrolledClass}</option>)}</select></div>{formError&&<div className="phase2-alert-error" data-crm-error>{formError}</div>}</div><div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setBookingSlot(null)}>Cancel</button><button type="submit" className="btn-primary" disabled={saving}><UserCheck size={15}/>{saving?"Booking…":"Confirm booking"}</button></div></form></motion.div></div>}
       </AnimatePresence>
 
       {/* =========================================================================
