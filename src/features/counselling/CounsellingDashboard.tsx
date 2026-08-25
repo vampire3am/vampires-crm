@@ -277,13 +277,15 @@ export function CounsellingDashboard() {
     tuition: "",
     intake: "",
   });
+  const [editingUniversityId,setEditingUniversityId]=useState<string|null>(null);
 
-  const openUniversityForm = (destination?: DestinationCatalog) => {
-    setNewUniForm(current => ({
-      ...current,
-      country: destination?.name ?? destinations[0]?.name ?? "",
-      countryCode: destination?.code ?? destinations[0]?.code ?? "",
-    }));
+  const universityCurrency=(country:string)=>destinations.find(item=>item.name===country)?.currency||COUNTRY_METADATA.find(item=>item[0]===country)?.[2]||"USD";
+  const tuitionWithCurrency=(tuition:string,country:string)=>{if(!tuition.trim())return"N/A";const currency=universityCurrency(country);const amount=tuition.trim().replace(/^[A-Z]{3}\s+/i,"");return`${currency} ${amount}`};
+
+  const openUniversityForm = (destination?: DestinationCatalog,university?:PartnerUniversity) => {
+    setEditingUniversityId(university?.id??null);
+    const country=university?.country??destination?.name??destinations[0]?.name??"";
+    setNewUniForm({name:university?.name??"",city:university?.city??"",country,countryCode:university?.countryCode??destination?.code??destinations[0]?.code??"",ranking:university?.ranking??"",popularCourses:university?.popularCourses.join(", ")??"",minPte:university?.minPte??"",minIelts:university?.minIelts??"",minGpa:university?.minGpa??"",scholarship:university?.scholarship??"",tuition:(university?.tuition??"").replace(/^[A-Z]{3}\s+/i,""),intake:university?.intake??""});
     setShowAddUniModal(true);
   };
 
@@ -540,7 +542,7 @@ export function CounsellingDashboard() {
     const coursesArray = newUniForm.popularCourses.split(",").map(s => s.trim()).filter(Boolean);
 
     const newUni: PartnerUniversity = {
-      id: `uni-${Date.now()}`,
+      id: editingUniversityId??`uni-${Date.now()}`,
       name: newUniForm.name.trim(),
       city: newUniForm.city.trim(),
       country: newUniForm.country,
@@ -550,23 +552,25 @@ export function CounsellingDashboard() {
       minPte: newUniForm.minPte.trim() || "58+",
       minIelts: newUniForm.minIelts.trim() || "6.0",
       minGpa: newUniForm.minGpa.trim() || "Not specified",
-      scholarship: newUniForm.scholarship.trim() || "Merit & Early Entry Grants",
-      tuition: newUniForm.tuition.trim() || "Competitive Fee Structure",
+      scholarship: newUniForm.scholarship.trim(),
+      tuition: tuitionWithCurrency(newUniForm.tuition,newUniForm.country),
       intake: newUniForm.intake.trim() || "September & January",
     };
 
-    const updatedUnis = [newUni, ...universities];
+    const updatedUnis = editingUniversityId?universities.map(item=>item.id===editingUniversityId?{...newUni,courses:item.courses}:item):[newUni, ...universities];
     saveUniversities(updatedUnis);
 
     // Also increment the country's universities count
     const updatedDests = destinations.map(d =>
-      d.name === newUniForm.country ? { ...d, universitiesCount: d.universitiesCount + 1 } : d
+      d.name === newUniForm.country ? { ...d, universitiesCount: editingUniversityId?d.universitiesCount:d.universitiesCount + 1 } : d
     );
     const affected=updatedDests.find(destination=>destination.name===newUniForm.country);
     try{if(affected)await DestinationCatalogService.save(affected);saveDestinations(updatedDests);setCatalogError("");}
     catch(error){setCatalogError(error instanceof Error?error.message:"Unable to update the destination catalogue")}
 
     setShowAddUniModal(false);
+    notifySuccess(editingUniversityId?"University updated":"University added",`${newUni.name} was saved successfully.`);
+    setEditingUniversityId(null);
     setNewUniForm({
       name: "",
       city: "",
@@ -1038,15 +1042,12 @@ export function CounsellingDashboard() {
           </div>
 
           <div className="table-wrapper">
-            <table className="crm-table">
+            <table className="crm-table university-directory-table">
               <thead>
                 <tr>
-                  <th>University & Campus</th>
-                  <th>Destination</th>
-                  <th>Rank & Accreditation</th>
-                  <th>Popular Programs</th>
-                  <th>Min Entry Score</th>
-                  <th>Scholarships</th>
+                  <th>Institution</th>
+                  <th>Programs</th>
+                  <th>Admission Profile</th>
                   <th>Annual Tuition</th>
                   <th style={{ textAlign: "right" }}>Action</th>
                 </tr>
@@ -1059,22 +1060,10 @@ export function CounsellingDashboard() {
                         <strong style={{ fontSize: "13.5px", color: "var(--text-main)" }}>{uni.name}</strong>
                         <div style={{ fontSize: "11.5px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
                           <MapPin size={12} />
-                          <span>{uni.city}</span>
+                          <span>{uni.city}</span><span>·</span><CountryFlag code={uni.countryCode} size={13}/><span>{uni.country}</span>
                         </div>
+                        <span className="university-rank-label">{uni.ranking||"Accredited partner"}</span>
                       </div>
-                    </td>
-
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <CountryFlag code={uni.countryCode} size={15} />
-                        <span style={{ fontWeight: 600 }}>{uni.country}</span>
-                      </div>
-                    </td>
-
-                    <td>
-                      <span className="badge-status counselling" style={{ fontSize: "11px" }}>
-                        {uni.ranking}
-                      </span>
                     </td>
 
                     <td>
@@ -1084,28 +1073,19 @@ export function CounsellingDashboard() {
                       </div>
                     </td>
 
-                    <td>
-                      <div style={{ fontSize: "11.5px" }}>
-                        <div><strong>GPA:</strong> {uni.minGpa || "Not specified"}</div>
-                        <div><strong>PTE:</strong> {uni.minPte}</div>
-                        <div><strong>IELTS:</strong> {uni.minIelts}</div>
-                      </div>
-                    </td>
-
-                    <td>
-                      <span style={{ fontSize: "11.5px", color: "var(--success-text, #059669)", fontWeight: 600 }}>
-                        {uni.scholarship}
-                      </span>
+                    <td><div className="university-admission-summary"><span><b>GPA</b>{uni.minGpa||"N/A"}</span><span><b>PTE</b>{uni.minPte||"N/A"}</span><span><b>IELTS</b>{uni.minIelts||"N/A"}</span><small>Scholarship: {uni.scholarship||"N/A"}</small></div>
                     </td>
 
                     <td>
                       <strong className="code-font" style={{ fontSize: "12.5px" }}>
-                        {uni.tuition}
+                        {tuitionWithCurrency(uni.tuition,uni.country)}
                       </strong>
                     </td>
 
                     <td style={{ textAlign: "right" }}>
                       <div className="catalog-row-actions">
+                        <button
+                          type="button" className="catalog-icon-button" aria-label={`Edit ${uni.name}`} title="Edit university" onClick={()=>openUniversityForm(undefined,uni)}><Pencil size={14}/></button>
                         <button
                           type="button"
                           className="btn-secondary university-course-button"
@@ -1486,7 +1466,7 @@ export function CounsellingDashboard() {
               <div className="modal-header-clean">
                 <div>
                   <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
-                    Add Partner University / Institution
+                    {editingUniversityId?"Edit Partner University / Institution":"Add Partner University / Institution"}
                   </h3>
                   <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "2px 0 0" }}>
                     Configure university agreements, campus, rankings, and entry requirements
@@ -1557,13 +1537,13 @@ export function CounsellingDashboard() {
 
                     <div className="form-group">
                       <label>Annual Tuition Fee *</label>
-                      <input
+                      <div className="currency-input"><span>{universityCurrency(newUniForm.country)}</span><input
                         type="text"
                         required
                         value={newUniForm.tuition}
                         onChange={e => setNewUniForm({ ...newUniForm, tuition: e.target.value })}
-                        placeholder="e.g. £18,500 / yr or A$32,000 / yr"
-                      />
+                        placeholder="e.g. 250,000 / year"
+                      /></div>
                     </div>
                   </div>
 
@@ -1600,7 +1580,7 @@ export function CounsellingDashboard() {
                   </div>
 
                   <div className="form-group">
-                    <label>Available Scholarships</label>
+                    <label>Available Scholarships <small>(optional)</small></label>
                     <input
                       type="text"
                       value={newUniForm.scholarship}
@@ -1630,7 +1610,7 @@ export function CounsellingDashboard() {
                   </button>
                   <button type="submit" className="btn-primary">
                     <Building2 size={15} />
-                    <span>Save Partner University</span>
+                    <span>{editingUniversityId?"Save Changes":"Save Partner University"}</span>
                   </button>
                 </div>
               </form>
