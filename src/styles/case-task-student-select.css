@@ -1,0 +1,13 @@
+.case-task-modal{overflow:visible}
+.case-task-modal .case-task-student-field{position:relative}
+.case-task-modal .student-select-trigger{height:auto;min-height:54px;padding:8px 11px;border-radius:10px}
+.case-task-modal .student-select-search input{height:auto;padding:0;border:0;border-radius:0;background:transparent;font-size:11px}
+.case-task-modal .student-select-menu{z-index:1900;max-height:310px}
+.case-task-modal .student-select-results{max-height:245px}
+.case-task-selected-student{display:flex;align-items:center;gap:10px;margin-top:-7px;padding:10px 12px;border:1px solid #a7f3d0;border-radius:9px;background:#f0fdf7}
+.case-task-selected-student>span{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:#102f5c;color:#fff;font-size:12px;font-weight:800}
+.case-task-selected-student>div{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px}
+.case-task-selected-student strong{font-size:11.5px;color:#162b49}
+.case-task-selected-student small{overflow:hidden;color:#64748b;font-size:9.5px;text-overflow:ellipsis;white-space:nowrap}
+.case-task-selected-student>svg{color:#059669}
+.case-task-modal .modal-footer-clean .btn-primary:disabled{cursor:not-allowed;opacity:.45}

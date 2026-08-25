@@ -31,6 +31,7 @@ import "./styles/workspace-reload.css";
 import "./styles/metric-indicators.css";
 import "./styles/case-task-panel.css";
 import "./styles/case-task-modal.css";
+import "./styles/case-task-student-select.css";
 import "./styles/classes-workspace.css";
 import "./styles/student-registration-redesign.css";
 import "./styles/student-record-editor.css";
