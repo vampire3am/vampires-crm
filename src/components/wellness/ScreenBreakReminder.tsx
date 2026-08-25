@@ -274,12 +274,26 @@ export function ScreenBreakReminder() {
                   boxShadow: "0 8px 20px rgba(225, 29, 72, 0.25)",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "4px" }}>
-                  <img
-                    src="/abroad-logo-new.png"
-                    alt="AECS"
-                    style={{ height: "28px", width: "auto", filter: "brightness(0) invert(1)" }}
-                  />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", marginBottom: "6px" }}>
+                  <span
+                    style={{
+                      width: "48px",
+                      height: "48px",
+                      flex: "0 0 48px",
+                      display: "grid",
+                      placeItems: "center",
+                      overflow: "hidden",
+                      borderRadius: "50%",
+                      background: "#FFFFFF",
+                      boxShadow: "0 2px 8px rgba(71, 85, 105, 0.18)",
+                    }}
+                  >
+                    <img
+                      src="/abroad-logo-transparent.png"
+                      alt="Abroad Education Consultancy Services logo"
+                      style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }}
+                    />
+                  </span>
                   <div style={{ textAlign: "left" }}>
                     <div style={{ fontSize: "15px", fontWeight: 800, letterSpacing: "0.5px", lineHeight: 1.1 }}>
                       ABROAD EDUCATION

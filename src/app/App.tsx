@@ -1,6 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
-import { CrmSkeleton } from "../components/common/CrmSkeleton";
+import { WorkspaceReload } from "../components/common/WorkspaceReload";
 import { CrmNotificationCenter } from "../components/common/CrmNotifications";
 
 const AppShell = lazy(() => import("../components/layout/AppShell").then(m => ({ default: m.AppShell })));
@@ -83,9 +83,25 @@ const NotFound = () => (
 
 import { RoleRouteGuard } from "../features/auth/RoleRouteGuard";
 
+const BOOT_LOADER_SESSION_KEY = "aecs_boot_loader_seen_v1";
+
 export default function App() {
+  const [showBootLoader, setShowBootLoader] = useState(() => {
+    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const isManualReload = navigation?.type === "reload";
+    if (sessionStorage.getItem(BOOT_LOADER_SESSION_KEY) && !isManualReload) return false;
+    sessionStorage.setItem(BOOT_LOADER_SESSION_KEY, "true");
+    return true;
+  });
+
+  useEffect(() => {
+    if (!showBootLoader) return;
+    const bootTimer = globalThis.setTimeout(() => setShowBootLoader(false), 4350);
+    return () => globalThis.clearTimeout(bootTimer);
+  }, [showBootLoader]);
+
   return (
-    <><CrmNotificationCenter/><Suspense fallback={<CrmSkeleton />}>
+    <>{showBootLoader && <WorkspaceReload duration={3900} />}<CrmNotificationCenter/><Suspense fallback={<div className="app-loader" role="status">Opening workspace…</div>}>
       <Routes>
         {/* Staff login route */}
         <Route path="/login" element={<LoginArea />} />

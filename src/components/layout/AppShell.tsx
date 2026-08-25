@@ -40,6 +40,7 @@ import { useAuth } from "../../features/auth/AuthProvider";
 import { ScreenBreakReminder } from "../wellness/ScreenBreakReminder";
 import { GlobalMessageNotifier } from "../common/GlobalMessageNotifier";
 import { IncomingCallToast } from "../calling/IncomingCallToast";
+import { getUnreadMessages, markMessagesRead, MessagingService } from "../../services/messagingService";
 
 const SEARCH_ITEMS = [
   { label: "Dashboard Overview", detail: "Kathmandu Hub operations snapshot", to: "/dashboard", icon: LayoutDashboard },
@@ -68,12 +69,42 @@ export function AppShell() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem("abroad-theme") === "dark");
-  const [hrmsOpen, setHrmsOpen] = useState(true); // Open by default as requested in screenshot
+  const [hrmsOpen, setHrmsOpen] = useState(false);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const searchInput = useRef<HTMLInputElement>(null);
 
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, permissions, signOut } = useAuth();
+  const currentStaffId = profile?.id ?? "pending-session";
+
+  useEffect(() => {
+    let active = true;
+
+    const refreshUnreadMessages = async () => {
+      try {
+        const messages = await MessagingService.getMessages();
+        if (!active) return;
+        if (location.pathname.startsWith("/messages")) {
+          markMessagesRead(messages, currentStaffId);
+          setUnreadMessageCount(0);
+        } else {
+          setUnreadMessageCount(getUnreadMessages(messages, currentStaffId).length);
+        }
+      } catch {
+        if (active) setUnreadMessageCount(0);
+      }
+    };
+
+    void refreshUnreadMessages();
+    const unsubscribe = MessagingService.subscribeToSyncEvents(refreshUnreadMessages);
+    window.addEventListener("aecs:message-read-state", refreshUnreadMessages);
+    return () => {
+      active = false;
+      unsubscribe();
+      window.removeEventListener("aecs:message-read-state", refreshUnreadMessages);
+    };
+  }, [currentStaffId, location.pathname]);
 
   // Find page title from path
   const currentTitle = useMemo(() => {
@@ -186,7 +217,6 @@ export function AppShell() {
                   <Zap size={16} />
                   <span>Leads</span>
                 </div>
-                <span className="nav-badge" style={{ background: "rgba(239, 68, 68, 0.85)" }}>0</span>
               </NavLink>
             )}
 
@@ -199,7 +229,6 @@ export function AppShell() {
                   <Users size={16} />
                   <span>Students</span>
                 </div>
-                <span className="nav-badge" style={{ background: "rgba(249, 115, 22, 0.85)" }}>0</span>
               </NavLink>
             )}
 
@@ -212,7 +241,6 @@ export function AppShell() {
                   <PlaneTakeoff size={16} />
                   <span>Applications</span>
                 </div>
-                <span className="nav-badge" style={{ background: "rgba(245, 158, 11, 0.8)" }}>0</span>
               </NavLink>
             )}
 
@@ -237,7 +265,6 @@ export function AppShell() {
                   <Handshake size={16} />
                   <span>B2B Partners</span>
                 </div>
-                <span className="nav-badge" style={{ background: "rgba(234, 88, 12, 0.85)" }}>0</span>
               </NavLink>
             )}
 
@@ -250,7 +277,6 @@ export function AppShell() {
                   <BookOpen size={16} />
                   <span>Classes</span>
                 </div>
-                <span className="nav-badge" style={{ background: "rgba(249, 115, 22, 0.85)" }}>0</span>
               </NavLink>
             )}
 
@@ -263,7 +289,6 @@ export function AppShell() {
                   <Award size={16} />
                   <span>Mock Tests</span>
                 </div>
-                <span className="nav-badge" style={{ background: "rgba(245, 158, 11, 0.85)" }}>0</span>
               </NavLink>
             )}
 
@@ -389,6 +414,16 @@ export function AppShell() {
                 <MessageSquare size={16} />
                 <span>Messages</span>
               </div>
+              {unreadMessageCount > 0 && (
+                <span
+                  className="nav-badge"
+                  aria-label={`${unreadMessageCount} unread message${unreadMessageCount === 1 ? "" : "s"}`}
+                  title={`${unreadMessageCount} unread message${unreadMessageCount === 1 ? "" : "s"}`}
+                  style={{ background: "rgba(239, 68, 68, 0.9)" }}
+                >
+                  {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
+                </span>
+              )}
             </NavLink>
 
             {/* EMAIL AUTOMATION & DRIP ENGINE */}

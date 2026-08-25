@@ -1,12 +1,11 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
-import { CrmSkeleton } from "../../components/common/CrmSkeleton";
 
 export function ProtectedRoute() {
   const { session, loading } = useAuth();
 
   if (loading) {
-    return <CrmSkeleton />;
+    return <div className="app-loader" role="status">Connecting securely…</div>;
   }
 
   // Strict check: No session -> Must redirect to Login page

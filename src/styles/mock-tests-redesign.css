@@ -1,0 +1,49 @@
+.mock-tests-workspace {
+  --mock-navy: #0d2c55;
+  --mock-orange: #ff6714;
+  padding-bottom: 48px;
+}
+
+.mock-tests-workspace .modal-dialog-clean {
+  border: 1px solid #dbe4ef;
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(13, 35, 66, .24);
+}
+
+.mock-result-dialog { width: min(780px, calc(100vw - 32px)); overflow: hidden; }
+.mock-result-dialog-header {
+  background: linear-gradient(135deg, var(--mock-navy), #173f70);
+  border-bottom: 0;
+  padding: 22px 24px;
+}
+.mock-result-dialog-header h3 { color: #fff !important; font-size: 18px !important; }
+.mock-result-dialog-header p { color: #c9d8ea !important; }
+.mock-result-dialog-header .drawer-close-btn { color: #fff; border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.08); }
+.mock-result-dialog-body { max-height: min(68vh, 650px); overflow-y: auto; padding: 22px 24px; background: #fbfcfe; }
+.mock-result-dialog .form-row-2, .mock-sectional-grid { align-items: start; }
+.mock-result-dialog .form-group { min-width: 0; }
+.mock-result-dialog input, .mock-result-dialog select, .mock-result-dialog textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+
+.mock-sectional-card { background: #f2f6fb !important; border-color: #dce6f1 !important; padding: 16px !important; border-radius: 12px !important; }
+.mock-sectional-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.mock-sectional-grid .form-group { margin-bottom: 0; }
+
+.mock-target-check { display: flex; gap: 12px; align-items: flex-start; padding: 13px 14px; border: 1px solid #d9e6df; border-radius: 11px; background: #f2fbf6; cursor: pointer; }
+.mock-target-check input { width: 17px; height: 17px; margin-top: 2px; accent-color: #079b62; }
+.mock-target-check span { display: grid; gap: 3px; }
+.mock-target-check strong { color: #153551; font-size: 12px; }
+.mock-target-check small { color: #64748b; font-size: 11px; }
+
+.mock-booking-dialog { width: min(520px, calc(100vw - 32px)); overflow: hidden; }
+.mock-booking-dialog .modal-header-clean { padding: 20px 22px; background: #f7f9fc; }
+.mock-booking-dialog .modal-header-clean h3 { margin: 3px 0; color: #102d51; }
+.mock-booking-dialog .modal-header-clean p, .mock-booking-dialog .modal-header-clean small { margin: 0; color: #64748b; }
+.mock-booking-capacity { display: flex; align-items: center; gap: 9px; padding: 11px 13px; margin-bottom: 16px; border-radius: 10px; color: #17416c; background: #edf5fd; font-size: 12px; font-weight: 650; }
+
+@media (max-width: 720px) {
+  .mock-result-dialog-body { padding: 18px; }
+  .mock-sectional-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 460px) {
+  .mock-sectional-grid { grid-template-columns: 1fr; }
+}

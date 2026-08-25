@@ -27,7 +27,7 @@ import "./styles/call-modal.css";
 import "./styles/email-workspace.css";
 import "./styles/leads-redesign.css";
 import "./styles/leads-typography.css";
-import "./styles/crm-skeleton.css";
+import "./styles/workspace-reload.css";
 import "./styles/metric-indicators.css";
 import "./styles/case-task-panel.css";
 import "./styles/case-task-modal.css";
@@ -36,9 +36,11 @@ import "./styles/student-registration-redesign.css";
 import "./styles/student-record-editor.css";
 import "./styles/student-document-vault.css";
 import "./styles/student-directory-redesign.css";
+import "./styles/mock-tests-redesign.css";
 import "./styles/crm-notifications.css";
 import "./styles/directory-tables.css";
 import "./styles/university-course-manager.css";
+import "./styles/lead-conversion-dialog.css";
 import { ErrorBoundary } from "./core/error/ErrorBoundary";
 
 // Total purge of previous sample dataset keys on initial load

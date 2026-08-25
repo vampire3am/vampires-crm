@@ -13,4 +13,42 @@ const key = (
   productionPublishableKey
 ) as string;
 export const isSupabaseConfigured = Boolean(url && key);
-export const supabase = createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
+
+const mutationRpc = /^(create|update|delete|register|review|mark|send|toggle|add|schedule|complete|convert|clock|invite|upload|remove|save|assign|approve|reject|record|submit|cancel|restore|archive|set)_/i;
+const humanize = (value: string) => value.replace(/[_-]+/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
+
+const crmFetch: typeof fetch = async (input, init) => {
+  const response = await fetch(input, init);
+  if (!response.ok || typeof window === "undefined") return response;
+  const requestUrl = typeof input === "string" || input instanceof URL ? String(input) : input.url;
+  const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+  const parsed = new URL(requestUrl, window.location.origin);
+  const rpcName = parsed.pathname.match(/\/rest\/v1\/rpc\/([^/?]+)/)?.[1] ?? "";
+  const tableName = parsed.pathname.match(/\/rest\/v1\/([^/?]+)/)?.[1] ?? "";
+  const isTableMutation = Boolean(tableName && tableName !== "rpc" && method !== "GET" && method !== "HEAD");
+  const isRpcMutation = Boolean(rpcName && mutationRpc.test(rpcName));
+  const isStorageMutation = /\/storage\/v1\/object\/(?!sign\/)/.test(parsed.pathname) && ["POST", "PUT", "PATCH", "DELETE"].includes(method);
+  const isFunctionMutation = /\/functions\/v1\//.test(parsed.pathname) && method === "POST";
+  if (!(isTableMutation || isRpcMutation || isStorageMutation || isFunctionMutation)) return response;
+
+  const completedAt = Date.now();
+  const action = rpcName
+    ? humanize(rpcName)
+    : isStorageMutation
+      ? method === "DELETE" ? "File Removed" : "File Uploaded"
+      : isFunctionMutation
+        ? "Request Completed"
+        : `${method === "DELETE" ? "Deleted" : method === "POST" ? "Created" : "Updated"} ${humanize(tableName)}`;
+  window.setTimeout(() => {
+    const state = window as Window & { __aecsLastSuccessAt?: number };
+    if ((state.__aecsLastSuccessAt ?? 0) > completedAt) return;
+    state.__aecsLastSuccessAt = Date.now();
+    window.dispatchEvent(new CustomEvent("aecs:notice", { detail: { id: crypto.randomUUID(), tone: "success", title: `${action} successfully` } }));
+  }, 900);
+  return response;
+};
+
+export const supabase = createClient(url, key, {
+  auth: { persistSession: true, autoRefreshToken: true },
+  global: { fetch: crmFetch },
+});
