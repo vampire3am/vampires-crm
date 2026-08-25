@@ -115,6 +115,7 @@ export interface UniversityCourse {
 const INITIAL_DESTINATIONS_MASTER: DestinationCatalog[] = [];
 
 const INITIAL_PARTNER_UNIVERSITIES: PartnerUniversity[] = [];
+const cleanUniversity=(university:PartnerUniversity):PartnerUniversity=>({...university,scholarship:university.scholarship==="Merit & Early Entry Grants"?"":university.scholarship,tuition:university.tuition==="Competitive Fee Structure"?"":university.tuition});
 
 const DESTINATIONS_STORAGE_KEY = "aecs_destinations_catalog_v2";
 const SYNTHETIC_ENGLISH_TESTS = ["IELTS (6.0+)", "PTE (56+)", "Duolingo"];
@@ -191,7 +192,7 @@ export function CounsellingDashboard() {
     const saved = localStorage.getItem(UNIVERSITIES_STORAGE_KEY);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return (JSON.parse(saved) as PartnerUniversity[]).map(cleanUniversity);
       } catch (e) {}
     }
     return INITIAL_PARTNER_UNIVERSITIES;
@@ -315,8 +316,8 @@ export function CounsellingDashboard() {
   };
 
   const saveUniversities = (updated: PartnerUniversity[]) => {
-    setUniversities(updated);
-    localStorage.setItem(UNIVERSITIES_STORAGE_KEY, JSON.stringify(updated));
+    const cleaned=updated.map(cleanUniversity);setUniversities(cleaned);
+    localStorage.setItem(UNIVERSITIES_STORAGE_KEY, JSON.stringify(cleaned));
   };
 
   const selectedCourseUniversity = universities.find(university => university.id === courseUniversityId) ?? null;
