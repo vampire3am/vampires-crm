@@ -400,6 +400,23 @@ export function ApplicationWorkspace() {
   // Submit Handler
   const handleSubmitNewApplication = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (applicationFormStep === 1) {
+      if (!newAppForm.studentCode) {
+        notifyError("Select a student", "Choose a registered student before continuing to the study plan.");
+        return;
+      }
+      setApplicationFormStep(2);
+      return;
+    }
+    if (applicationFormStep === 2) {
+      const studyPlanComplete = newAppForm.country && newAppForm.universityName.trim() && newAppForm.studyLevel && newAppForm.course.trim() && newAppForm.intake;
+      if (!studyPlanComplete) {
+        notifyError("Complete the study plan", "Select the country, university, study level, course, and intake before continuing.");
+        return;
+      }
+      setApplicationFormStep(3);
+      return;
+    }
     if (!newAppForm.studentName.trim() || !newAppForm.universityName.trim()) {
       setApplicationFormError("Select a student and university before saving.");
       return;
