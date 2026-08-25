@@ -26,7 +26,9 @@ const crmFetch: typeof fetch = async (input, init) => {
   const rpcName = parsed.pathname.match(/\/rest\/v1\/rpc\/([^/?]+)/)?.[1] ?? "";
   const tableName = parsed.pathname.match(/\/rest\/v1\/([^/?]+)/)?.[1] ?? "";
   const isTableMutation = Boolean(tableName && tableName !== "rpc" && method !== "GET" && method !== "HEAD");
-  const isRpcMutation = Boolean(rpcName && mutationRpc.test(rpcName));
+  // Read-state synchronization is an automatic background operation, not a
+  // user-facing completed task. Never generate success toasts for it.
+  const isRpcMutation = Boolean(rpcName && rpcName !== "mark_all_messages_read" && mutationRpc.test(rpcName));
   const isStorageMutation = /\/storage\/v1\/object\/(?!sign\/)/.test(parsed.pathname) && ["POST", "PUT", "PATCH", "DELETE"].includes(method);
   const isFunctionMutation = /\/functions\/v1\//.test(parsed.pathname) && method === "POST";
   if (!(isTableMutation || isRpcMutation || isStorageMutation || isFunctionMutation)) return response;

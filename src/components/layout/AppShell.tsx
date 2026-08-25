@@ -84,7 +84,6 @@ export function AppShell() {
     const refreshUnreadMessages = async () => {
       try {
         if (location.pathname.startsWith("/messages")) {
-          await MessagingService.markAllRead();
           if (!active) return;
           setUnreadMessageCount(0);
         } else {
