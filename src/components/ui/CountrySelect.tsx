@@ -12,6 +12,7 @@ interface CountrySelectProps {
   id?: string;
   name?: string;
   placement?: "auto" | "top" | "bottom";
+  countries?: DestinationCountry[];
 }
 
 export function CountrySelect({
@@ -23,6 +24,7 @@ export function CountrySelect({
   id,
   name,
   placement = "auto",
+  countries = AECS_AUTHORIZED_COUNTRIES,
 }: CountrySelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
@@ -30,7 +32,7 @@ export function CountrySelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const selectedCountry = AECS_AUTHORIZED_COUNTRIES.find(
+  const selectedCountry = countries.find(
     c => c.name.toLowerCase() === value.toLowerCase() || c.code.toLowerCase() === value.toLowerCase()
   );
 
@@ -71,7 +73,7 @@ export function CountrySelect({
     setIsOpen(false);
   };
 
-  const filtered = AECS_AUTHORIZED_COUNTRIES.filter(
+  const filtered = countries.filter(
     c =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.code.toLowerCase().includes(search.toLowerCase())

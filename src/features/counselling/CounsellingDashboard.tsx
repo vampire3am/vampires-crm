@@ -53,6 +53,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CountryFlag } from "../../components/ui/PhoneInput";
 import { CountryDisplay } from "../../components/ui/CountryDisplay";
+import { CountrySelect } from "../../components/ui/CountrySelect";
 import { AECS_AUTHORIZED_COUNTRIES, DestinationCountry } from "../../lib/destinationsData";
 import { COUNTRY_METADATA } from "../../lib/countryMetadata.generated";
 import { MultiIntakePicker } from "../../components/ui/MultiIntakePicker";
@@ -130,6 +131,7 @@ const removeSyntheticDestinationData = (destination: DestinationCatalog): Destin
 });
 
 const COUNTRY_AUTOFILL = COUNTRY_METADATA;
+const ALL_COUNTRY_OPTIONS: DestinationCountry[] = COUNTRY_METADATA.map(country=>({name:country[0],code:country[1],currency:country[2],dialCode:country[3],region:country[4],popularIntakes:""}));
 
 const COUNTRY_NAME_ALIASES: Record<string, string> = {
   US: "United States",
@@ -1299,15 +1301,7 @@ export function CounsellingDashboard() {
                   <div className="form-row-2">
                     <div className="form-group">
                       <label>Country Name *</label>
-                      <input
-                        type="text"
-                        required
-                        list="aecs-country-catalog"
-                        value={newCountryForm.name}
-                        onChange={e => updateCountryName(e.target.value)}
-                        placeholder="Start typing a country name"
-                      />
-                      <datalist id="aecs-country-catalog">{COUNTRY_AUTOFILL.map(country => <option key={country[1]} value={country[0]} />)}</datalist>
+                      <CountrySelect required placement="bottom" countries={ALL_COUNTRY_OPTIONS} value={newCountryForm.name} onChange={updateCountryName} placeholder="Search and select a country" />
                     </div>
 
                     <div className="form-group">
