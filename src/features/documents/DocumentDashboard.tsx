@@ -143,6 +143,13 @@ export function DocumentDashboard() {
     return matchesCategory && matchesStatus && matchesSearch;
   });
 
+  const verifiedCount = docs.filter(doc => doc.status === "VERIFIED").length;
+  const reviewCount = docs.filter(doc => doc.status === "UNDER_REVIEW").length;
+  const actionCount = docs.filter(doc =>
+    doc.status === "ACTION_REQUIRED" || doc.status === "EXPIRED" || doc.status === "REJECTED"
+  ).length;
+  const percentageOfTotal = (value: number) => docs.length > 0 ? Math.round((value / docs.length) * 100) : 0;
+
   return (
     <div className="page-container">
       {/* Header Row */}
@@ -189,6 +196,9 @@ export function DocumentDashboard() {
           </div>
           <div className="metric-value">{docs.length}</div>
           <KpiTrendIndicator metricKey="documents.total" value={docs.length} label={`Across ${students.length} registered candidates`} />
+          <div className="document-kpi-rail" aria-label={`${docs.length} total documents`}>
+            <span style={{ width: docs.length > 0 ? "100%" : "0%" }} />
+          </div>
         </div>
 
         <div className="metric-box">
@@ -198,12 +208,11 @@ export function DocumentDashboard() {
               <ShieldCheck size={17} />
             </div>
           </div>
-          <div className="metric-value">{docs.filter(d => d.status === "VERIFIED").length}</div>
-          <span className="metric-sub">
-            {docs.length > 0
-              ? `${Math.round((docs.filter(d => d.status === "VERIFIED").length / docs.length) * 100)}% compliance clearance`
-              : "0% compliance clearance"}
-          </span>
+          <div className="metric-value">{verifiedCount}</div>
+          <KpiTrendIndicator metricKey="documents.verified" value={verifiedCount} label={`${percentageOfTotal(verifiedCount)}% compliance clearance`} />
+          <div className="document-kpi-rail green" aria-label={`${percentageOfTotal(verifiedCount)}% verified`}>
+            <span style={{ width: `${percentageOfTotal(verifiedCount)}%` }} />
+          </div>
         </div>
 
         <div className="metric-box">
@@ -213,8 +222,11 @@ export function DocumentDashboard() {
               <Clock size={17} />
             </div>
           </div>
-          <div className="metric-value">{docs.filter(d => d.status === "UNDER_REVIEW").length}</div>
-          <KpiTrendIndicator metricKey="documents.review" value={docs.filter(d => d.status === "UNDER_REVIEW").length} label="Admissions & Visa review" />
+          <div className="metric-value">{reviewCount}</div>
+          <KpiTrendIndicator metricKey="documents.review" value={reviewCount} label="Admissions & Visa review" />
+          <div className="document-kpi-rail amber" aria-label={`${percentageOfTotal(reviewCount)}% under review`}>
+            <span style={{ width: `${percentageOfTotal(reviewCount)}%` }} />
+          </div>
         </div>
 
         <div className="metric-box">
@@ -224,10 +236,11 @@ export function DocumentDashboard() {
               <AlertTriangle size={17} />
             </div>
           </div>
-          <div className="metric-value">
-            {docs.filter(d => d.status === "ACTION_REQUIRED" || d.status === "EXPIRED" || d.status === "REJECTED").length}
+          <div className="metric-value">{actionCount}</div>
+          <KpiTrendIndicator metricKey="documents.action-required" value={actionCount} label="Expired TRF / Missing stamps" />
+          <div className="document-kpi-rail purple" aria-label={`${percentageOfTotal(actionCount)}% requiring action`}>
+            <span style={{ width: `${percentageOfTotal(actionCount)}%` }} />
           </div>
-          <KpiTrendIndicator metricKey="documents.action-required" value={docs.filter(d => d.status === "ACTION_REQUIRED" || d.status === "EXPIRED" || d.status === "REJECTED").length} label="Expired TRF / Missing stamps" />
         </div>
       </div>
 
@@ -528,7 +541,36 @@ export function DocumentDashboard() {
                   />
                 </div>
 
-                <div className="form-group"><label>Select documents * (multiple files · 1 MB each · 20 MB total)</label><input type="file" multiple required accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={e=>{const files=Array.from(e.target.files??[]);e.currentTarget.value="";if(!validateDocumentFiles(files))return;setSelectedFiles(files);if(files.length===1&&!uploadForm.fileName)setUploadForm({...uploadForm,fileName:files[0].name.replace(/\.[^.]+$/,'')})}}/>{selectedFiles.length>0&&<div className="document-upload-selection"><strong>{selectedFiles.length} document{selectedFiles.length===1?"":"s"} selected</strong><span>{selectedFiles.map(file=>file.name).join(" · ")}</span></div>}</div>
+                <div className="form-group">
+                  <label>Select documents * (multiple files · 1 MB each · 20 MB total)</label>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.docx"
+                    aria-required="true"
+                    onChange={e => {
+                      const files = Array.from(e.target.files ?? []);
+                      e.currentTarget.value = "";
+                      if (!validateDocumentFiles(files)) {
+                        setSelectedFiles([]);
+                        return;
+                      }
+                      setSelectedFiles(files);
+                      if (files.length === 1 && !uploadForm.fileName.trim()) {
+                        setUploadForm(previous => ({
+                          ...previous,
+                          fileName: files[0].name.replace(/\.[^.]+$/, ""),
+                        }));
+                      }
+                    }}
+                  />
+                  {selectedFiles.length > 0 && (
+                    <div className="document-upload-selection" role="status">
+                      <strong>{selectedFiles.length} document{selectedFiles.length === 1 ? "" : "s"} ready to upload</strong>
+                      <span>{selectedFiles.map(file => file.name).join(" · ")}</span>
+                    </div>
+                  )}
+                </div>
 
                 <div className="form-row-2">
                   <div className="form-group">
@@ -563,15 +605,11 @@ export function DocumentDashboard() {
       {/* INSPECT / AUDIT DOCUMENT MODAL */}
       {inspectDoc && (
         <div className="modal-backdrop-clean" onClick={() => setInspectDoc(null)}>
-          <div className="modal-dialog-clean" style={{ maxWidth: "560px" }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header-clean">
-              <div>
-                <button type="button" className="btn-secondary" onClick={async()=>{try{window.open(await DocumentService.signedUrl(inspectDoc.storagePath),"_blank","noopener,noreferrer")}catch(error){setErrorMessage(error instanceof Error?error.message:"Preview failed.")}}}><Eye size={14}/>Secure preview (5 min)</button>
-              </div>
-
-              <div>
+          <div className="modal-dialog-clean document-audit-dialog" onClick={e => e.stopPropagation()}>
+            <div className="modal-header-clean document-audit-header">
+              <div className="document-audit-heading">
                 <h3>Document Verification Audit</h3>
-                <p style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                <p>
                   {inspectDoc.studentName} · {inspectDoc.studentCode}
                 </p>
               </div>
@@ -584,23 +622,13 @@ export function DocumentDashboard() {
               </button>
             </div>
 
-            <div className="modal-body-clean" style={{ gap: "16px" }}>
-              <div
-                style={{
-                  padding: "16px",
-                  borderRadius: "var(--radius-sm)",
-                  background: "var(--bg-card-subtle)",
-                  border: "1px solid var(--border-subtle)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <FileText size={28} style={{ color: "var(--accent-blue)" }} />
-                  <div>
-                    <strong style={{ fontSize: "13px", display: "block" }}>{inspectDoc.fileName}</strong>
-                    <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+            <div className="modal-body-clean document-audit-body">
+              <div className="document-audit-file-card">
+                <div className="document-audit-file-main">
+                  <span className="document-audit-file-icon"><FileText size={22} /></span>
+                  <div className="document-audit-file-copy">
+                    <strong>{inspectDoc.fileName}</strong>
+                    <span>
                       {inspectDoc.category} · {inspectDoc.fileSize} · Version {inspectDoc.version}
                     </span>
                   </div>
@@ -610,6 +638,12 @@ export function DocumentDashboard() {
                 </span>
               </div>
 
+              <button type="button" className="btn-secondary document-preview-button" onClick={async()=>{try{window.open(await DocumentService.signedUrl(inspectDoc.storagePath),"_blank","noopener,noreferrer")}catch(error){setErrorMessage(error instanceof Error?error.message:"Preview failed.")}}}>
+                <Eye size={14}/>
+                <span>Open secure preview</span>
+                <small>Link valid for 5 minutes</small>
+              </button>
+
               {inspectDoc.notes && (
                 <div style={{ padding: "12px 14px", background: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", fontSize: "12px" }}>
                   <strong style={{ display: "block", marginBottom: "4px", color: "var(--text-main)" }}>Audit Remarks:</strong>
@@ -617,13 +651,13 @@ export function DocumentDashboard() {
                 </div>
               )}
               {inspectDoc.expiresOn&&<div className="phase2-form-note"><strong>Expiry:</strong> {new Date(inspectDoc.expiresOn).toLocaleDateString()}</div>}
-              <div><strong style={{fontSize:"13px"}}>Audit history</strong><div className="phase4-audit-list">{inspectDoc.activities.map((item,index)=><div key={`${item.createdAt}-${index}`}><b>{item.action.replaceAll("_"," ")}</b><small>{item.performedBy} · {new Date(item.createdAt).toLocaleString()}</small></div>)}</div></div>
+              <div className="document-audit-history"><strong>Audit history</strong><div className="phase4-audit-list">{inspectDoc.activities.map((item,index)=><div key={`${item.createdAt}-${index}`}><b>{item.action.replaceAll("_"," ")}</b><small>{item.performedBy} · {new Date(item.createdAt).toLocaleString()}</small></div>)}</div></div>
 
               <div>
                 <label style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", display: "block", marginBottom: "8px" }}>
                   Set Verification Status
                 </label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+                <div className="document-audit-status-actions">
                   <button
                     type="button"
                     className="btn-secondary"
