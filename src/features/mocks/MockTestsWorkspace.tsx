@@ -69,11 +69,17 @@ export function MockTestsWorkspace() {
   const [activeResultDetail, setActiveResultDetail] = useState<MockTestResult | null>(null);
   const [bookingSlot,setBookingSlot]=useState<MockTestSlot|null>(null);
   const [bookingStudentId,setBookingStudentId]=useState("");
+  const [bookingCandidateType,setBookingCandidateType]=useState<"INTERNAL"|"EXTERNAL">("INTERNAL");
+  const [bookingExternal,setBookingExternal]=useState({name:"",phone:"",email:""});
+  const [editingResultId,setEditingResultId]=useState<string|null>(null);
 
   // Score Entry Form
   const [scoreForm, setScoreForm] = useState({
+    candidateType: "INTERNAL" as "INTERNAL"|"EXTERNAL",
     studentName: "",
     studentCode: "",
+    phone: "",
+    email: "",
     testType: "IELTS Academic" as MockTestResult["testType"],
     testDate: new Date().toISOString().split("T")[0],
     venue: "",
@@ -137,11 +143,13 @@ export function MockTestsWorkspace() {
   // Handle Score Submit
   const handleSaveResult = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!scoreForm.studentCode || !scoreForm.testDate || !scoreForm.overallScore.trim() || !scoreForm.examiner.trim() || !scoreForm.venue.trim() || !scoreForm.examinerFeedback.trim() || !scoreForm.listening || !scoreForm.reading || !scoreForm.writing || !scoreForm.speaking) { setFormError("Select a student and complete all required evaluation fields."); return; }
+    if ((scoreForm.candidateType==="INTERNAL"&&!scoreForm.studentCode)||(scoreForm.candidateType==="EXTERNAL"&&!scoreForm.studentName.trim()) || !scoreForm.testDate || !scoreForm.overallScore.trim() || !scoreForm.examiner.trim() || !scoreForm.venue.trim() || !scoreForm.examinerFeedback.trim() || !scoreForm.listening || !scoreForm.reading || !scoreForm.writing || !scoreForm.speaking) { setFormError("Select or enter a candidate and complete all required evaluation fields."); return; }
     setSaving(true); setFormError("");
-    try { await MockTestService.createResult({
+    try { const resultPayload={
+      candidateType: scoreForm.candidateType,
       studentName: scoreForm.studentName.trim(),
       studentCode: scoreForm.studentCode.trim(),
+      phone:scoreForm.phone.trim(),email:scoreForm.email.trim(),
       testType: scoreForm.testType,
       testDate: scoreForm.testDate,
       venue: scoreForm.venue.trim(),
@@ -154,13 +162,15 @@ export function MockTestsWorkspace() {
       status: scoreForm.status,
       examinerFeedback: scoreForm.examinerFeedback.trim(),
       targetAchieved: scoreForm.targetAchieved,
-    });
+    }; if(editingResultId) await MockTestService.updateResult(editingResultId,resultPayload); else await MockTestService.createResult(resultPayload);
 
     await loadData();
-    setShowAddResultModal(false); setSuccessMessage("Mock-test evaluation recorded successfully.");
+    setShowAddResultModal(false); setEditingResultId(null); setSuccessMessage(editingResultId?"Mock-test evaluation updated successfully.":"Mock-test evaluation recorded successfully.");
     setScoreForm({
+      candidateType:"INTERNAL",
       studentName: "",
       studentCode: "",
+      phone:"",email:"",
       testType: "IELTS Academic",
       testDate: new Date().toISOString().split("T")[0],
       venue: "",
@@ -177,7 +187,10 @@ export function MockTestsWorkspace() {
     finally { setSaving(false); }
   };
 
-  const handleBookCandidate=async(event:React.FormEvent)=>{event.preventDefault();if(!bookingSlot||!bookingStudentId){setFormError("Select a class student for this mock-test slot.");return}setSaving(true);setFormError("");try{await MockTestService.bookCandidate(bookingSlot.id,bookingStudentId);await loadData();setBookingSlot(null);setBookingStudentId("");setSuccessMessage("Candidate booked into the mock-test session successfully.")}catch(error){setFormError(error instanceof Error?error.message:"Unable to book candidate")}finally{setSaving(false)}};
+  const handleBookCandidate=async(event:React.FormEvent)=>{event.preventDefault();if(!bookingSlot||(bookingCandidateType==="INTERNAL"&&!bookingStudentId)||(bookingCandidateType==="EXTERNAL"&&!bookingExternal.name.trim())){setFormError("Select an internal student or enter the external candidate name.");return}setSaving(true);setFormError("");try{await MockTestService.bookCandidate(bookingSlot.id,{type:bookingCandidateType,classStudentId:bookingStudentId,name:bookingExternal.name.trim(),phone:bookingExternal.phone.trim(),email:bookingExternal.email.trim()});await loadData();setBookingSlot(null);setBookingStudentId("");setBookingExternal({name:"",phone:"",email:""});setSuccessMessage("Candidate staged in the mock-test session successfully.")}catch(error){setFormError(error instanceof Error?error.message:"Unable to book candidate")}finally{setSaving(false)}};
+
+  const openNewResult=()=>{setEditingResultId(null);setFormError("");setShowAddResultModal(true)};
+  const openEditResult=(result:MockTestResult)=>{setEditingResultId(result.id);setActiveResultDetail(null);setFormError("");setScoreForm({candidateType:result.candidateType,studentName:result.studentName,studentCode:result.studentCode==="External walk-in"?"":result.studentCode,phone:result.phone??"",email:result.email??"",testType:result.testType,testDate:result.testDate,venue:result.venue,examiner:result.examiner,listening:String(result.listening),reading:String(result.reading),writing:String(result.writing),speaking:String(result.speaking),overallScore:result.overallScore,status:result.status,examinerFeedback:result.examinerFeedback,targetAchieved:result.targetAchieved});setShowAddResultModal(true)};
 
   // Handle Slot Submit
   const handleSaveSlot = async (e: React.FormEvent) => {
@@ -226,7 +239,7 @@ export function MockTestsWorkspace() {
             type="button"
             className="btn-primary"
             style={{ background: "#0F172A", borderColor: "#0F172A", color: "#FFFFFF" }}
-            onClick={() => setShowAddResultModal(true)}
+            onClick={openNewResult}
           >
             <Plus size={15} />
             <span>Log Mock Test Scores</span>
@@ -238,7 +251,7 @@ export function MockTestsWorkspace() {
             onClick={() => setShowAddSlotModal(true)}
           >
             <Calendar size={15} />
-            <span>Schedule Mock Slot</span>
+            <span>Stage & Schedule Mock</span>
           </button>
 
           <button
@@ -375,7 +388,7 @@ export function MockTestsWorkspace() {
                 type="button"
                 className="btn-primary"
                 style={{ background: "#0F172A", borderColor: "#0F172A", padding: "6px 14px", fontSize: "12px" }}
-                onClick={() => setShowAddResultModal(true)}
+                onClick={openNewResult}
               >
                 <Plus size={14} />
                 <span>Log Score</span>
@@ -468,9 +481,10 @@ export function MockTestsWorkspace() {
                         style={{ padding: "4px 10px", fontSize: "11.5px" }}
                         onClick={() => setActiveResultDetail(res)}
                       >
-                        <span>Card</span>
+                        <span>View</span>
                         <ChevronRight size={13} />
                       </button>
+                      <button type="button" className="btn-secondary" style={{padding:"4px 10px",fontSize:"11.5px",marginLeft:"6px"}} onClick={()=>openEditResult(res)}><Edit size={12}/><span>Edit</span></button>
                     </td>
                   </tr>
                 ))}
@@ -645,7 +659,7 @@ export function MockTestsWorkspace() {
               <div className="modal-header-clean mock-result-dialog-header">
                 <div>
                   <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
-                    Log Mock Test Evaluation Scores
+                    {editingResultId?"Edit Mock Test Evaluation":"Log Mock Test Evaluation Scores"}
                   </h3>
                   <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "2px 0 0" }}>
                     Record listening, reading, writing, and speaking marks
@@ -662,10 +676,11 @@ export function MockTestsWorkspace() {
 
               <form onSubmit={handleSaveResult}>
                 <div className="modal-body-clean mock-result-dialog-body">
-                  <div className="form-row-2">
+                  <div className="mock-candidate-type"><button type="button" className={scoreForm.candidateType==="INTERNAL"?"active":""} disabled={!!editingResultId} onClick={()=>setScoreForm({...scoreForm,candidateType:"INTERNAL",studentName:"",studentCode:"",phone:"",email:""})}><UserCheck size={15}/>Internal student</button><button type="button" className={scoreForm.candidateType==="EXTERNAL"?"active":""} disabled={!!editingResultId} onClick={()=>setScoreForm({...scoreForm,candidateType:"EXTERNAL",studentName:"",studentCode:"",phone:"",email:""})}><UserPlus size={15}/>External candidate</button></div>
+                  {scoreForm.candidateType==="INTERNAL"?<div className="form-row-2">
                     <div className="form-group">
                       <label>Class student *</label>
-                      <select required value={scoreForm.studentCode} onChange={event=>{const student=classStudents.find(item=>item.studentCode===event.target.value);setScoreForm(current=>({...current,studentCode:student?.studentCode??"",studentName:student?.fullName??""}))}}>
+                      <select required disabled={!!editingResultId} value={scoreForm.studentCode} onChange={event=>{const student=classStudents.find(item=>item.studentCode===event.target.value);setScoreForm(current=>({...current,studentCode:student?.studentCode??"",studentName:student?.fullName??""}))}}>
                         <option value="">Select student by name or code</option>
                         {classStudents.map(student=><option key={student.id} value={student.studentCode}>{student.fullName} · {student.studentCode} · {student.enrolledClass}</option>)}
                       </select>
@@ -675,7 +690,7 @@ export function MockTestsWorkspace() {
                       <label>Student Code *</label>
                       <input type="text" readOnly value={scoreForm.studentCode} placeholder="Filled from selected student" />
                     </div>
-                  </div>
+                  </div>:<div className="mock-external-fields"><div className="form-group"><label>External candidate name *</label><input required value={scoreForm.studentName} onChange={event=>setScoreForm({...scoreForm,studentName:event.target.value})} placeholder="Full legal name"/></div><div className="form-group"><label>Phone</label><input value={scoreForm.phone} onChange={event=>setScoreForm({...scoreForm,phone:event.target.value})} placeholder="Contact number"/></div><div className="form-group"><label>Email</label><input type="email" value={scoreForm.email} onChange={event=>setScoreForm({...scoreForm,email:event.target.value})} placeholder="Optional email"/></div></div>}
 
                   <div className="form-row-2">
                     <div className="form-group">
@@ -786,6 +801,7 @@ export function MockTestsWorkspace() {
                     <div className="form-group"><label>Venue / Test Centre *</label><input required value={scoreForm.venue} onChange={event=>setScoreForm({...scoreForm,venue:event.target.value})} placeholder="AECS Test Centre · Room 2"/></div>
                     <div className="form-group"><label>Result status *</label><select value={scoreForm.status} onChange={event=>setScoreForm({...scoreForm,status:event.target.value as MockTestResult["status"]})}><option>Score Issued</option><option>Pending Evaluation</option><option>Absent</option><option>Scheduled</option></select></div>
                   </div>
+                  <div className="form-group mock-target-outcome"><label>Target score outcome *</label><select value={scoreForm.targetAchieved?"MET":"NOT_MET"} onChange={event=>setScoreForm({...scoreForm,targetAchieved:event.target.value==="MET"})}><option value="NOT_MET">Target not achieved — further preparation required</option><option value="MET">Target achieved — candidate is exam ready</option></select></div>
 
                   <div className="form-group">
                     <label>Examiner Feedback & Action Plan *</label>
@@ -797,7 +813,6 @@ export function MockTestsWorkspace() {
                       placeholder="Identify modules needing improvement and provide exam readiness assessment…"
                     />
                   </div>
-                  <label className="mock-target-check"><input type="checkbox" checked={scoreForm.targetAchieved} onChange={event=>setScoreForm({...scoreForm,targetAchieved:event.target.checked})}/><span><strong>Target score achieved</strong><small>Mark the candidate as exam-ready for this test format.</small></span></label>
                 </div>
 
                 <div className="modal-footer-clean">
@@ -810,7 +825,7 @@ export function MockTestsWorkspace() {
                   </button>
                   <button type="submit" className="btn-primary" disabled={saving}>
                     <Award size={15} />
-                    <span>{saving?"Saving…":"Issue Mock Result"}</span>
+                    <span>{saving?"Saving…":editingResultId?"Save Changes":"Issue Mock Result"}</span>
                   </button>
                 </div>
               </form>
@@ -820,7 +835,7 @@ export function MockTestsWorkspace() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {bookingSlot&&<div className="modal-backdrop-clean" onClick={()=>setBookingSlot(null)}><motion.div initial={{opacity:0,scale:.97}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.97}} className="modal-dialog-clean mock-booking-dialog" onClick={event=>event.stopPropagation()}><div className="modal-header-clean"><div><small>Candidate booking</small><h3>{bookingSlot.title}</h3><p>{bookingSlot.date} · {bookingSlot.time} · {bookingSlot.room}</p></div><button type="button" className="drawer-close-btn" onClick={()=>setBookingSlot(null)}><X size={18}/></button></div><form onSubmit={handleBookCandidate}><div className="modal-body-clean"><div className="mock-booking-capacity"><Users size={17}/><span>{bookingSlot.bookedSeats} of {bookingSlot.totalSeats} seats booked</span></div><div className="form-group"><label>Class student *</label><select required value={bookingStudentId} onChange={event=>setBookingStudentId(event.target.value)}><option value="">Select student by name or code</option>{classStudents.map(student=><option key={student.id} value={student.id}>{student.studentCode} · {student.fullName} · {student.enrolledClass}</option>)}</select></div>{formError&&<div className="phase2-alert-error" data-crm-error>{formError}</div>}</div><div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setBookingSlot(null)}>Cancel</button><button type="submit" className="btn-primary" disabled={saving}><UserCheck size={15}/>{saving?"Booking…":"Confirm booking"}</button></div></form></motion.div></div>}
+        {bookingSlot&&<div className="modal-backdrop-clean" onClick={()=>setBookingSlot(null)}><motion.div initial={{opacity:0,scale:.97}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:.97}} className="modal-dialog-clean mock-booking-dialog" onClick={event=>event.stopPropagation()}><div className="modal-header-clean"><div><small>Mock staging desk</small><h3>{bookingSlot.title}</h3><p>{bookingSlot.date} · {bookingSlot.time} · {bookingSlot.room}</p></div><button type="button" className="drawer-close-btn" onClick={()=>setBookingSlot(null)}><X size={18}/></button></div><form onSubmit={handleBookCandidate}><div className="modal-body-clean"><div className="mock-booking-capacity"><Users size={17}/><span>{bookingSlot.bookedSeats} of {bookingSlot.totalSeats} seats staged</span></div><div className="mock-candidate-type"><button type="button" className={bookingCandidateType==="INTERNAL"?"active":""} onClick={()=>setBookingCandidateType("INTERNAL")}><UserCheck size={15}/>Internal student</button><button type="button" className={bookingCandidateType==="EXTERNAL"?"active":""} onClick={()=>setBookingCandidateType("EXTERNAL")}><UserPlus size={15}/>External walk-in</button></div>{bookingCandidateType==="INTERNAL"?<div className="form-group"><label>Class student *</label><select required value={bookingStudentId} onChange={event=>setBookingStudentId(event.target.value)}><option value="">Select student by name or code</option>{classStudents.map(student=><option key={student.id} value={student.id}>{student.studentCode} · {student.fullName} · {student.enrolledClass}</option>)}</select></div>:<div className="mock-external-fields"><div className="form-group"><label>Candidate name *</label><input required value={bookingExternal.name} onChange={e=>setBookingExternal({...bookingExternal,name:e.target.value})}/></div><div className="form-group"><label>Phone</label><input value={bookingExternal.phone} onChange={e=>setBookingExternal({...bookingExternal,phone:e.target.value})}/></div><div className="form-group"><label>Email</label><input type="email" value={bookingExternal.email} onChange={e=>setBookingExternal({...bookingExternal,email:e.target.value})}/></div></div>}{formError&&<div className="phase2-alert-error" data-crm-error>{formError}</div>}</div><div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setBookingSlot(null)}>Cancel</button><button type="submit" className="btn-primary" disabled={saving}><UserCheck size={15}/>{saving?"Staging…":"Stage candidate"}</button></div></form></motion.div></div>}
       </AnimatePresence>
 
       {/* =========================================================================
@@ -871,13 +886,7 @@ export function MockTestsWorkspace() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="drawer-close-btn"
-                  onClick={() => setActiveResultDetail(null)}
-                >
-                  <X size={18} />
-                </button>
+                <div style={{display:"flex",gap:"8px"}}><button type="button" className="btn-secondary" onClick={()=>openEditResult(activeResultDetail)}><Edit size={14}/>Edit result</button><button type="button" className="drawer-close-btn" onClick={() => setActiveResultDetail(null)}><X size={18} /></button></div>
               </div>
 
               <div style={{ padding: "22px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" }}>
@@ -901,6 +910,7 @@ export function MockTestsWorkspace() {
                       {activeResultDetail.targetAchieved ? "University Cutoff Met" : "Additional Prep Recommended"}
                     </span>
                   </div>
+                  <div className={`mock-target-decision ${activeResultDetail.targetAchieved?"met":"not-met"}`}><BadgeCheck size={16}/><strong>{activeResultDetail.targetAchieved?"Target score achieved":"Target score not achieved"}</strong></div>
                 </div>
 
                 {/* Sectional Breakdown Grid */}

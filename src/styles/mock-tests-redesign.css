@@ -39,10 +39,20 @@
 .mock-booking-dialog .modal-header-clean h3 { margin: 3px 0; color: #102d51; }
 .mock-booking-dialog .modal-header-clean p, .mock-booking-dialog .modal-header-clean small { margin: 0; color: #64748b; }
 .mock-booking-capacity { display: flex; align-items: center; gap: 9px; padding: 11px 13px; margin-bottom: 16px; border-radius: 10px; color: #17416c; background: #edf5fd; font-size: 12px; font-weight: 650; }
+.mock-candidate-type { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px; margin-bottom: 16px; border-radius: 12px; background: #eef2f7; }
+.mock-candidate-type button { display: flex; justify-content: center; align-items: center; gap: 7px; min-height: 40px; border: 1px solid transparent; border-radius: 9px; color: #52647a; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.mock-candidate-type button.active { color: #0d2c55; background: #fff; border-color: #d7e1ed; box-shadow: 0 3px 9px rgba(15,35,60,.08); }
+.mock-candidate-type button:disabled { cursor: not-allowed; opacity: .72; }
+.mock-external-fields { display: grid; grid-template-columns: 1.25fr 1fr 1.25fr; gap: 10px; }
+.mock-target-outcome { padding: 13px 14px; border: 1px solid #d8e5dc; border-radius: 11px; background: #f5fbf7; }
+.mock-target-decision { display: flex; justify-content: center; align-items: center; gap: 7px; margin: 12px auto 0; padding: 8px 12px; width: fit-content; border-radius: 999px; font-size: 12px; }
+.mock-target-decision.met { color: #08734e; background: #e8f8f0; }
+.mock-target-decision.not-met { color: #a24b0b; background: #fff3dc; }
 
 @media (max-width: 720px) {
   .mock-result-dialog-body { padding: 18px; }
   .mock-sectional-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mock-external-fields { grid-template-columns: 1fr; }
 }
 @media (max-width: 460px) {
   .mock-sectional-grid { grid-template-columns: 1fr; }
