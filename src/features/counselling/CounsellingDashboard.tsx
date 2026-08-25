@@ -131,7 +131,7 @@ const removeSyntheticDestinationData = (destination: DestinationCatalog): Destin
 });
 
 const COUNTRY_AUTOFILL = COUNTRY_METADATA;
-const ALL_COUNTRY_OPTIONS: DestinationCountry[] = COUNTRY_METADATA.map(country=>({name:country[0],code:country[1],currency:country[2],dialCode:country[3],region:country[4],popularIntakes:""}));
+const ALL_COUNTRY_OPTIONS: DestinationCountry[] = COUNTRY_METADATA.map(country=>({name:country[0],code:country[1],currency:country[2],dialCode:country[3],region:country[4],popularIntakes:[]}));
 
 const COUNTRY_NAME_ALIASES: Record<string, string> = {
   US: "United States",
