@@ -13,6 +13,7 @@ import { CountryDisplay } from "../../components/ui/CountryDisplay";
 import { StudentDirectoryRecord, StudentService } from "../../services/studentService";
 import { DocumentRecord, DocumentService } from "../../services/documentService";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
+import { validateDocumentFiles } from "../../lib/documentUploadPolicy";
 
 type ApplicationDestination = { name: string; code: string; popularIntakes?: string[]; intakeCycles?: string[] };
 type ApplicationUniversity = {
@@ -231,6 +232,7 @@ export function ApplicationWorkspace() {
 
   const uploadDossierDocuments = async (files:File[]) => {
     if (!activeDossier || files.length === 0) return;
+    if (!validateDocumentFiles(files)) return;
     if (files.length > 15) { notifyError("Too many documents", "Upload a maximum of 15 documents in one batch."); return; }
     setDossierFilesBusy(true);
     try {

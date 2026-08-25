@@ -56,7 +56,8 @@ import { CountryDisplay } from "../../components/ui/CountryDisplay";
 import { AECS_AUTHORIZED_COUNTRIES, DestinationCountry } from "../../lib/destinationsData";
 import { COUNTRY_METADATA } from "../../lib/countryMetadata.generated";
 import { MultiIntakePicker } from "../../components/ui/MultiIntakePicker";
-import { notifySuccess } from "../../components/common/CrmNotifications";
+import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
+import { validateDocumentFiles } from "../../lib/documentUploadPolicy";
 import { CounsellingService } from "../../services/counsellingService";
 import { DestinationCatalogService } from "../../services/destinationCatalogService";
 import { useAuth } from "../auth/AuthProvider";
@@ -420,7 +421,8 @@ export function CounsellingDashboard() {
 
   const handleDestinationDocuments = async (files: FileList | null) => {
     if (!files || !activeCountryDetail) return;
-    const allowed = Array.from(files).slice(0, 10).filter(file => file.size <= 5 * 1024 * 1024);
+    const allowed = Array.from(files).slice(0, 10);
+    if (!validateDocumentFiles(allowed)) return;
     const additions = await Promise.all(allowed.map(file => new Promise<DestinationDocument>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve({ id: crypto.randomUUID(), name: file.name, size: file.size, type: file.type, dataUrl: String(reader.result), uploadedAt: new Date().toISOString() });
@@ -432,7 +434,7 @@ export function CounsellingDashboard() {
       saveDestinationDocuments({ ...destinationDocuments, [code]: [...(destinationDocuments[code] || []), ...additions] });
       window.alert(`${additions.length} destination document${additions.length === 1 ? "" : "s"} uploaded successfully.`);
     } catch {
-      window.alert("The browser could not store these files. Upload fewer or smaller documents and try again.");
+      notifyError("Document upload failed","The browser could not store these files. Upload fewer documents and try again.");
     }
   };
 

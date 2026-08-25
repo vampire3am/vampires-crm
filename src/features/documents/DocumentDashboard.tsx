@@ -19,6 +19,7 @@ import { StudentService } from "../../services/studentService";
 import { KpiTrendIndicator } from "../../components/common/KpiTrendIndicator";
 import { DocumentService, type DocumentRecord } from "../../services/documentService";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
+import { validateDocumentFiles } from "../../lib/documentUploadPolicy";
 
 type DocItem = DocumentRecord;
 
@@ -30,6 +31,7 @@ const DOCUMENT_CATEGORIES = [
   "Financial Documents",
   "Visa & Embassy Files",
   "Recommendation Letters",
+  "Others",
 ] as const;
 
 const DOCUMENT_CHECKLIST = [
@@ -58,7 +60,7 @@ const STATUS_CONFIG: Record<DocItem["status"], { label: string; tone: string }> 
 export function DocumentDashboard() {
   const [docs, setDocs] = useState<DocItem[]>(INITIAL_DOCS);
   const [students, setStudents] = useState<Array<{id:string;student_code:string;full_name:string}>>([]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -98,9 +100,9 @@ export function DocumentDashboard() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile||!uploadForm.fileName.trim()) return;
+    if (!selectedFiles.length) return;
     setSaving(true);setErrorMessage("");
-    try{await DocumentService.upload({studentCode:uploadForm.studentCode,category:uploadForm.category,title:uploadForm.fileName,file:selectedFile,expiresOn:uploadForm.expiresOn,notes:uploadForm.notes});setDocs(await DocumentService.list());setShowUploadModal(false);setSelectedFile(null);notifySuccess("Document uploaded","The file is secure and ready for verification.");setUploadForm({
+    try{const results=await Promise.allSettled(selectedFiles.map(file=>DocumentService.upload({studentCode:uploadForm.studentCode,category:uploadForm.category,title:selectedFiles.length===1&&uploadForm.fileName.trim()?uploadForm.fileName.trim():file.name.replace(/\.[^.]+$/,""),file,expiresOn:uploadForm.expiresOn,notes:uploadForm.notes})));const failures=results.filter(result=>result.status==="rejected");if(failures.length)throw new Error(`${selectedFiles.length-failures.length} uploaded; ${failures.length} failed.`);setDocs(await DocumentService.list());setShowUploadModal(false);setSelectedFiles([]);notifySuccess(`${results.length} document${results.length===1?"":"s"} uploaded`,`The files are secure and ready for verification.`);setUploadForm({
       studentCode: students.length > 0 ? students[0].student_code : "",
       studentName: students.length > 0 ? students[0].full_name : "",
       fileName: "",
@@ -510,22 +512,22 @@ export function DocumentDashboard() {
                       <option value="Financial Documents">Financial Documents</option>
                       <option value="Visa & Embassy Files">Visa & Embassy Files</option>
                       <option value="Recommendation Letters">Recommendation Letters</option>
+                      <option value="Others">Others</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label>Document Name / Title *</label>
+                    <label>Document title (optional for a single file)</label>
                   <input
                     type="text"
-                    required
                     value={uploadForm.fileName}
                     onChange={e => setUploadForm({ ...uploadForm, fileName: e.target.value })}
                     placeholder="e.g. Tribhuvan_University_Character_Certificate.pdf"
                   />
                 </div>
 
-                <div className="form-group"><label>Select file * (PDF, JPG, PNG, DOCX · max 20 MB)</label><input type="file" required accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={e=>{const file=e.target.files?.[0]??null;setSelectedFile(file);if(file&&!uploadForm.fileName)setUploadForm({...uploadForm,fileName:file.name})}}/></div>
+                <div className="form-group"><label>Select documents * (multiple files · 1 MB each · 20 MB total)</label><input type="file" multiple required accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={e=>{const files=Array.from(e.target.files??[]);e.currentTarget.value="";if(!validateDocumentFiles(files))return;setSelectedFiles(files);if(files.length===1&&!uploadForm.fileName)setUploadForm({...uploadForm,fileName:files[0].name.replace(/\.[^.]+$/,'')})}}/>{selectedFiles.length>0&&<div className="document-upload-selection"><strong>{selectedFiles.length} document{selectedFiles.length===1?"":"s"} selected</strong><span>{selectedFiles.map(file=>file.name).join(" · ")}</span></div>}</div>
 
                 <div className="form-row-2">
                   <div className="form-group">
@@ -547,9 +549,9 @@ export function DocumentDashboard() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary" disabled={saving||!selectedFile||students.length===0}>
+                <button type="submit" className="btn-primary" disabled={saving||!selectedFiles.length||students.length===0}>
                   <UploadCloud size={15} />
-                  <span>Upload & Save Document</span>
+                  <span>{saving?"Uploading…":`Upload ${selectedFiles.length||""} document${selectedFiles.length===1?"":"s"}`}</span>
                 </button>
               </div>
             </form>
