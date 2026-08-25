@@ -1,9 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertCircle,
   Award,
   CheckCircle2,
   Download,
+  GraduationCap,
+  Link2,
   MessageCircle,
   RotateCcw,
   Search,
@@ -49,7 +50,7 @@ export function LeadsWorkspace() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [conversionLead, setConversionLead] = useState<LeadRecord | null>(null);
-  const [conversionProfile, setConversionProfile] = useState({ dob: "", gender: "", highestQualification: "", currentAddress: "" });
+  const [conversionProfile, setConversionProfile] = useState({ email: "", dob: "", gender: "", highestQualification: "", currentAddress: "" });
   const [followUp, setFollowUp] = useState({ dueAt: "", note: "" });
 
   const navigate = useNavigate();
@@ -139,6 +140,7 @@ export function LeadsWorkspace() {
   };
 
   const beginConversion = (lead: LeadRecord) => {
+    setConversionProfile({ email: lead.email ?? "", dob: "", gender: "", highestQualification: "", currentAddress: "" });
     setConversionLead(lead);
     setActiveLead(null);
   };
@@ -153,7 +155,7 @@ export function LeadsWorkspace() {
       await loadLeads();
       setConversionSuccess(student.code);
       setConversionLead(null);
-      setConversionProfile({ dob: "", gender: "", highestQualification: "", currentAddress: "" });
+      setConversionProfile({ email: "", dob: "", gender: "", highestQualification: "", currentAddress: "" });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to convert this lead.");
     } finally {
@@ -271,11 +273,7 @@ export function LeadsWorkspace() {
       </div>
 
       {errorMessage && (
-        <div className="phase2-alert phase2-alert-error" role="alert">
-          <AlertCircle size={18} />
-          <span>{errorMessage}</span>
-          <button type="button" onClick={() => setErrorMessage("")} aria-label="Dismiss error"><X size={16} /></button>
-        </div>
+        <div className="phase2-alert-error" role="alert" data-crm-error>{errorMessage}</div>
       )}
 
       {isLoading && <div className="phase2-loading" role="status">Loading live lead pipeline…</div>}
@@ -284,6 +282,7 @@ export function LeadsWorkspace() {
       {/* Conversion Banner Alert */}
       {conversionSuccess && (
         <div
+          data-crm-success
           style={{
             marginBottom: "18px",
             padding: "12px 18px",
@@ -973,14 +972,24 @@ export function LeadsWorkspace() {
 
       {conversionLead && (
         <div className="modal-backdrop-clean" onClick={() => setConversionLead(null)}>
-          <div className="modal-dialog-clean phase2-conversion" onClick={e => e.stopPropagation()}>
-            <div className="modal-header-clean"><div><small>Complete required identity details</small><h3>Convert {conversionLead.fullName}</h3></div><button type="button" className="drawer-close-btn" onClick={() => setConversionLead(null)}><X size={18}/></button></div>
-            <form onSubmit={handleConvertToStudent} className="modal-form-clean">
-              <p className="phase2-form-note">This creates one official student dossier and permanently links it to {conversionLead.leadCode}. Review these details before continuing.</p>
-              <div className="form-row-2"><div className="form-group"><label>Date of birth *</label><input type="date" required max={new Date().toISOString().slice(0,10)} value={conversionProfile.dob} onChange={e=>setConversionProfile({...conversionProfile,dob:e.target.value})}/></div><div className="form-group"><label>Gender *</label><select required value={conversionProfile.gender} onChange={e=>setConversionProfile({...conversionProfile,gender:e.target.value})}><option value="">Select gender</option><option>Male</option><option>Female</option><option>Other</option><option>Prefer not to say</option></select></div></div>
-              <div className="form-group"><label>Highest qualification *</label><input required minLength={2} value={conversionProfile.highestQualification} onChange={e=>setConversionProfile({...conversionProfile,highestQualification:e.target.value})} placeholder="e.g. Bachelor of Business Studies"/></div>
-              <div className="form-group"><label>Current address</label><input value={conversionProfile.currentAddress} onChange={e=>setConversionProfile({...conversionProfile,currentAddress:e.target.value})} placeholder="City, district"/></div>
-              <div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setConversionLead(null)}>Cancel</button><button type="submit" className="btn-primary" disabled={isSaving}><UserCheck size={15}/>Create student profile</button></div>
+          <div className="modal-dialog-clean phase2-conversion conversion-dialog" onClick={e => e.stopPropagation()}>
+            <div className="conversion-dialog-header">
+              <div className="conversion-dialog-icon"><GraduationCap size={22}/></div>
+              <div><small>Lead conversion</small><h3>Create student profile</h3><p>Add the remaining identity details for <strong>{conversionLead.fullName}</strong>.</p></div>
+              <button type="button" className="drawer-close-btn" aria-label="Close conversion dialog" onClick={() => setConversionLead(null)}><X size={18}/></button>
+            </div>
+            <form onSubmit={handleConvertToStudent} className="conversion-dialog-form">
+              <div className="conversion-link-card"><Link2 size={16}/><div><span>Linked lead record</span><strong>{conversionLead.leadCode}</strong></div><em>Ready to convert</em></div>
+              <div className="conversion-section-heading"><span>01</span><div><strong>Identity & education</strong><small>All starred fields are required to create the dossier.</small></div></div>
+              <div className="conversion-fields">
+                <div className="form-group conversion-field-wide"><label>Email address *</label><input type="email" required value={conversionProfile.email} onChange={e=>setConversionProfile({...conversionProfile,email:e.target.value})} placeholder="student@example.com"/></div>
+                <div className="form-group"><label>Date of birth *</label><input type="date" required max={new Date().toISOString().slice(0,10)} value={conversionProfile.dob} onChange={e=>setConversionProfile({...conversionProfile,dob:e.target.value})}/></div>
+                <div className="form-group"><label>Gender *</label><select required value={conversionProfile.gender} onChange={e=>setConversionProfile({...conversionProfile,gender:e.target.value})}><option value="">Select gender</option><option>Male</option><option>Female</option><option>Other</option><option>Prefer not to say</option></select></div>
+                <div className="form-group"><label>Highest qualification *</label><select required value={conversionProfile.highestQualification} onChange={e=>setConversionProfile({...conversionProfile,highestQualification:e.target.value})}><option value="">Select qualification</option><option>+2 / Higher Secondary (NEB)</option><option>Diploma</option><option>Bachelor's Degree</option><option>Master's Degree</option></select></div>
+                <div className="form-group"><label>Current address</label><input value={conversionProfile.currentAddress} onChange={e=>setConversionProfile({...conversionProfile,currentAddress:e.target.value})} placeholder="City, district"/></div>
+              </div>
+              <div className="conversion-assurance"><CheckCircle2 size={16}/><span>A unique student ID will be generated and permanently linked to this lead.</span></div>
+              <div className="modal-footer-clean conversion-dialog-footer"><button type="button" className="btn-secondary" onClick={()=>setConversionLead(null)}>Cancel</button><button type="submit" className="btn-primary" disabled={isSaving}><UserCheck size={16}/>{isSaving?"Creating profile…":"Create student profile"}</button></div>
             </form>
           </div>
         </div>
