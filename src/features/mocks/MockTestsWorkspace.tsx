@@ -96,13 +96,13 @@ export function MockTestsWorkspace() {
 
   // Slot Entry Form
   const [slotForm, setSlotForm] = useState({
-    title: "",
+    title: "IELTS Academic Full Mock",
     testType: "IELTS Academic" as MockTestSlot["testType"],
-    date: "",
-    time: "",
-    room: "",
+    date: new Date(Date.now()+86400000).toISOString().split("T")[0],
+    time: "09:00",
+    room: "AECS Mock Test Lab",
     invigilator: "",
-    totalSeats: 0,
+    totalSeats: 20,
     bookedSeats: 0,
     status: "OPEN" as MockTestSlot["status"],
   });
@@ -195,7 +195,8 @@ export function MockTestsWorkspace() {
   // Handle Slot Submit
   const handleSaveSlot = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!slotForm.title.trim() || !slotForm.date || !slotForm.time || !slotForm.room.trim() || !slotForm.invigilator.trim()) { setFormError("Title, date, time, venue and invigilator are required."); return; }
+    if (!slotForm.title.trim() || !slotForm.date || !slotForm.time || !slotForm.room.trim() || !slotForm.invigilator.trim()) { setFormError("Complete the session title, date, start time, venue and invigilator."); return; }
+    if(Number(slotForm.totalSeats)<1){setFormError("Seat capacity must be at least 1.");return}
     setSaving(true); setFormError("");
     try { await MockTestService.createSlot({
       title: slotForm.title.trim(),
@@ -210,11 +211,13 @@ export function MockTestsWorkspace() {
     });
 
     await loadData();
-    setShowAddSlotModal(false); setSuccessMessage("Mock-test session scheduled successfully.");
-    setSlotForm({title:"",testType:"IELTS Academic",date:"",time:"",room:"",invigilator:"",totalSeats:0,bookedSeats:0,status:"OPEN"});
+    setShowAddSlotModal(false); setActiveTab("slots"); setSuccessMessage("Mock-test session scheduled successfully. It is ready for candidate staging.");
+    setSlotForm({title:"IELTS Academic Full Mock",testType:"IELTS Academic",date:new Date(Date.now()+86400000).toISOString().split("T")[0],time:"09:00",room:"AECS Mock Test Lab",invigilator:profile?.full_name??"",totalSeats:20,bookedSeats:0,status:"OPEN"});
     } catch(error) { setFormError(error instanceof Error ? error.message : "Unable to schedule this mock-test session."); }
     finally { setSaving(false); }
   };
+
+  const openSlotScheduler=()=>{setFormError("");setSuccessMessage("");setSlotForm(current=>({...current,invigilator:current.invigilator||profile?.full_name||""}));setShowAddSlotModal(true)};
 
   // Metrics
   const totalMocks = results.length;
@@ -248,7 +251,7 @@ export function MockTestsWorkspace() {
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => setShowAddSlotModal(true)}
+            onClick={openSlotScheduler}
           >
             <Calendar size={15} />
             <span>Stage & Schedule Mock</span>
@@ -631,10 +634,10 @@ export function MockTestsWorkspace() {
         {showAddSlotModal && <div className="modal-backdrop-clean" onClick={()=>setShowAddSlotModal(false)}>
           <motion.div initial={{scale:.96,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:.96,opacity:0}} className="modal-dialog-clean" style={{maxWidth:620}} onClick={event=>event.stopPropagation()}>
             <div className="modal-header-clean"><div><h3>Schedule a mock-test session</h3><p>Create a controlled exam slot with accountable venue and invigilator details.</p></div><button type="button" className="drawer-close-btn" onClick={()=>setShowAddSlotModal(false)}><X size={18}/></button></div>
-            <form onSubmit={handleSaveSlot}>
+            <form onSubmit={handleSaveSlot} noValidate>
               <div className="modal-body-clean mock-schedule-form">
-                <section className="workflow-form-section"><header><span>1</span><div><strong>Test session</strong><small>Choose the exam format and session identity.</small></div></header><div className="form-row-2"><div className="form-group"><label>Session title *</label><input required value={slotForm.title} onChange={e=>setSlotForm({...slotForm,title:e.target.value})} placeholder="IELTS Academic Full Mock"/></div><div className="form-group"><label>Test format *</label><select value={slotForm.testType} onChange={e=>setSlotForm({...slotForm,testType:e.target.value as MockTestSlot["testType"]})}><option>IELTS Academic</option><option>PTE Academic</option><option>Duolingo (DET)</option><option>German A1</option></select></div></div></section>
-                <section className="workflow-form-section"><header><span>2</span><div><strong>Schedule and controls</strong><small>Set the operational details used by staff.</small></div></header><div className="form-row-2"><div className="form-group"><label>Date *</label><input type="date" required value={slotForm.date} onChange={e=>setSlotForm({...slotForm,date:e.target.value})}/></div><div className="form-group"><label>Start time *</label><input type="time" required value={slotForm.time} onChange={e=>setSlotForm({...slotForm,time:e.target.value})}/></div></div><div className="form-row-2"><div className="form-group"><label>Venue / room *</label><input required value={slotForm.room} onChange={e=>setSlotForm({...slotForm,room:e.target.value})}/></div><div className="form-group"><label>Invigilator *</label><input required value={slotForm.invigilator} onChange={e=>setSlotForm({...slotForm,invigilator:e.target.value})}/></div></div><div className="form-group"><label>Seat capacity *</label><input type="number" min="1" required value={slotForm.totalSeats||""} onChange={e=>setSlotForm({...slotForm,totalSeats:Number(e.target.value)})}/></div></section>
+                <section className="workflow-form-section"><header><span>1</span><div><strong>Test session</strong><small>Choose the exam format and session identity.</small></div></header><div className="form-row-2"><div className="form-group"><label>Session title *</label><input value={slotForm.title} onChange={e=>setSlotForm({...slotForm,title:e.target.value})} placeholder="IELTS Academic Full Mock"/></div><div className="form-group"><label>Test format *</label><select value={slotForm.testType} onChange={e=>{const testType=e.target.value as MockTestSlot["testType"];setSlotForm({...slotForm,testType,title:`${testType} Full Mock`})}}><option>IELTS Academic</option><option>PTE Academic</option><option>Duolingo (DET)</option><option>German A1</option></select></div></div></section>
+                <section className="workflow-form-section"><header><span>2</span><div><strong>Schedule and controls</strong><small>Set the operational details used by staff.</small></div></header><div className="form-row-2"><div className="form-group"><label>Date *</label><input type="date" min={new Date().toISOString().split("T")[0]} value={slotForm.date} onChange={e=>setSlotForm({...slotForm,date:e.target.value})}/></div><div className="form-group"><label>Start time *</label><input type="time" value={slotForm.time} onChange={e=>setSlotForm({...slotForm,time:e.target.value})}/></div></div><div className="form-row-2"><div className="form-group"><label>Venue / room *</label><input value={slotForm.room} onChange={e=>setSlotForm({...slotForm,room:e.target.value})}/></div><div className="form-group"><label>Invigilator *</label><input value={slotForm.invigilator} onChange={e=>setSlotForm({...slotForm,invigilator:e.target.value})}/></div></div><div className="form-group"><label>Seat capacity *</label><input type="number" min="1" max="500" value={slotForm.totalSeats||""} onChange={e=>setSlotForm({...slotForm,totalSeats:Number(e.target.value)})}/></div><div className="mock-schedule-ready"><CheckCircle2 size={16}/><span>After scheduling, open <strong>Scheduled Mock Exam Slots</strong> to stage internal students or external walk-ins.</span></div></section>
                 {formError&&<div className="phase2-alert phase2-alert-error"><AlertCircle size={16}/>{formError}</div>}
               </div>
               <div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setShowAddSlotModal(false)}>Cancel</button><button type="submit" className="btn-primary" disabled={saving}><CalendarCheck2 size={15}/>{saving?"Scheduling…":"Schedule session"}</button></div>
