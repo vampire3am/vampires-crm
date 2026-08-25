@@ -35,7 +35,7 @@
 .mock-target-check small { color: #64748b; font-size: 11px; }
 
 .mock-booking-dialog { width: min(590px, calc(100vw - 32px)); overflow: hidden; }
-.mock-schedule-dialog { width: min(700px, calc(100vw - 32px)); overflow: hidden; }
+.mock-schedule-dialog { width: min(740px, calc(100vw - 32px)); overflow: hidden; }
 .mock-booking-dialog .modal-header-clean { padding: 22px 24px; background: #f7f9fc; }
 .mock-booking-dialog .modal-header-clean h3 { margin: 2px 0; color: #102d51; }
 .mock-booking-dialog .modal-header-clean p, .mock-booking-dialog .modal-header-clean small { margin: 0; color: #64748b; }
@@ -46,9 +46,18 @@
 .mock-header-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; color: #ff6714; background: #fff1e9; }
 .mock-booking-capacity { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; padding: 12px 14px; margin-bottom: 16px; border-radius: 10px; color: #17416c; background: #edf5fd; font-size: 12px; font-weight: 650; }
 .mock-booking-capacity small { color: #617991; font-weight: 500; }
-.mock-schedule-form { max-height: min(68vh, 650px); overflow-y: auto; }
-.mock-schedule-form .workflow-form-section { border-radius: 14px; border-color: #dce5ef; box-shadow: 0 5px 16px rgba(17,40,70,.04); }
-.mock-schedule-ready { display: flex; align-items: flex-start; gap: 9px; margin-top: 12px; padding: 11px 12px; border-radius: 10px; color: #176044; background: #ecf9f2; font-size: 11.5px; line-height: 1.45; }
+.mock-schedule-form { max-height: min(70vh, 680px); overflow-y: auto; padding: 20px 24px; }
+.mock-schedule-form .workflow-form-section { padding: 18px; margin: 0 0 14px; border-radius: 12px; border-color: #dce5ef; box-shadow: none; }
+.mock-schedule-form .workflow-form-section:last-child { margin-bottom: 0; }
+.mock-schedule-form .workflow-form-section > header { margin-bottom: 18px; }
+.mock-schedule-form .workflow-form-section > header span { width: 34px; height: 34px; font-size: 12px; }
+.mock-schedule-form .form-row-2 { gap: 16px; margin-bottom: 16px; }
+.mock-schedule-form .form-row-2:last-of-type { margin-bottom: 16px; }
+.mock-schedule-form .form-group { margin: 0; min-width: 0; }
+.mock-schedule-form .form-group > label { display: block; margin: 0 0 7px; line-height: 1.2; }
+.mock-schedule-form input, .mock-schedule-form select { min-height: 44px; }
+.mock-schedule-form .workflow-form-section:nth-child(2) > .form-group { width: calc(50% - 8px); }
+.mock-schedule-ready { display: flex; align-items: flex-start; gap: 8px; margin-top: 18px; padding: 10px 12px; border-top: 1px solid #d8ebe1; border-radius: 0; color: #39705a; background: transparent; font-size: 11px; line-height: 1.45; }
 .mock-schedule-ready svg { flex: 0 0 auto; margin-top: 1px; }
 .mock-candidate-type { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px; margin-bottom: 16px; border-radius: 12px; background: #eef2f7; }
 .mock-candidate-type button { display: flex; justify-content: center; align-items: center; gap: 7px; min-height: 40px; border: 1px solid transparent; border-radius: 9px; color: #52647a; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
@@ -65,6 +74,7 @@
   .mock-result-dialog-body { padding: 18px; }
   .mock-sectional-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mock-external-fields { grid-template-columns: 1fr; }
+  .mock-schedule-form .workflow-form-section:nth-child(2) > .form-group { width: 100%; }
 }
 @media (max-width: 460px) {
   .mock-sectional-grid { grid-template-columns: 1fr; }
