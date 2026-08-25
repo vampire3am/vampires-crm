@@ -6,7 +6,7 @@ export const AECS_ORGANIZATION = {
   shortAddress: "Adwait Marga, Purano Buspark, Bagbazar",
   officeName: "AECS Bagbazar Main Office",
   website: "https://aecsnepal.com/",
-  destinations: ["Australia", "Canada", "USA", "South Korea", "New Zealand", "United Kingdom", "Germany", "Finland", "Japan", "Hungary", "Malta", "Cyprus"],
+  destinations: ["Australia", "UK", "USA", "New Zealand", "Canada", "Germany", "Finland", "Malta", "Cyprus", "Sweden", "Belgium", "Hungary", "Netherlands", "Ireland", "Japan", "South Korea"],
   testPreparation: ["IELTS", "PTE Academic", "Duolingo English Test"],
   credentials: ["ICEF IAS-Verified Agency", "Pearson PTE Top Achiever · 3 consecutive years", "Authorised exam booking centre"],
   achievements: { countries: "10+", partnerUniversities: "1,000+", visaSuccessRate: "98%", studentsGuided: "3,000+", visaGrants: "1,000+", averageIeltsScore: "7" },

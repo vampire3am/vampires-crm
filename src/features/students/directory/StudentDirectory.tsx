@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -6,6 +6,7 @@ import {
   Award,
   BookOpen,
   Calendar,
+  Camera,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -102,6 +103,10 @@ export function StudentDirectory() {
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
   const [showDocumentUpload, setShowDocumentUpload] = useState(false);
   const [documentForm, setDocumentForm] = useState({ title:"", category:"Passport & Identity", expiresOn:"", notes:"" });
+  const [studentPhotoUrl, setStudentPhotoUrl] = useState("");
+  const [studentPhotoUrls, setStudentPhotoUrls] = useState<Record<string, string>>({});
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Quick Lead Modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -125,10 +130,68 @@ export function StudentDirectory() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    void DocumentService.list().then(async records => {
+      const latestByStudent = new Map<string, DocumentRecord>();
+      for (const record of records) {
+        if (record.category === "Profile Photo" && !latestByStudent.has(record.studentCode)) latestByStudent.set(record.studentCode, record);
+      }
+      const entries = await Promise.all([...latestByStudent].map(async ([studentCode, photo]) => [studentCode, await DocumentService.signedUrl(photo.storagePath)] as const));
+      if (active) setStudentPhotoUrls(Object.fromEntries(entries));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     if (!activeStudent || inspectorTab !== "docs") return;
     setDocumentsLoading(true); setDocumentError("");
-    DocumentService.list().then(records=>setStudentDocuments(records.filter(record=>record.studentCode===activeStudent.code))).catch(error=>setDocumentError(error instanceof Error?error.message:"Documents could not be loaded")).finally(()=>setDocumentsLoading(false));
+    DocumentService.list().then(records=>setStudentDocuments(records.filter(record=>record.studentCode===activeStudent.code&&record.category!=="Profile Photo"))).catch(error=>setDocumentError(error instanceof Error?error.message:"Documents could not be loaded")).finally(()=>setDocumentsLoading(false));
   }, [activeStudent?.id, activeStudent?.code, inspectorTab]);
+
+  useEffect(() => {
+    let active = true;
+    setStudentPhotoUrl("");
+    if (!activeStudent) return;
+    void DocumentService.list().then(async records => {
+      const photo = records.find(record => record.studentCode === activeStudent.code && record.category === "Profile Photo");
+      if (!photo) return;
+      const url = await DocumentService.signedUrl(photo.storagePath);
+      if (active) {
+        setStudentPhotoUrl(url);
+        setStudentPhotoUrls(current => ({...current, [activeStudent.code]: url}));
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [activeStudent?.id, activeStudent?.code]);
+
+  const handleStudentPhotoUpload = async (file?: File) => {
+    if (!file || !activeStudent) return;
+    if (!(["image/jpeg", "image/png"] as string[]).includes(file.type)) {
+      notifyError("Unsupported photo", "Choose a JPEG or PNG image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      notifyError("Photo is too large", "Choose an image smaller than 5 MB.");
+      return;
+    }
+    setPhotoUploading(true);
+    try {
+      await DocumentService.upload({studentCode:activeStudent.code,category:"Profile Photo",title:`${activeStudent.fullName} profile photo`,file,expiresOn:"",notes:"Student profile image"});
+      const records = await DocumentService.list();
+      const photo = records.find(record => record.studentCode === activeStudent.code && record.category === "Profile Photo");
+      if (photo) {
+        const url = await DocumentService.signedUrl(photo.storagePath);
+        setStudentPhotoUrl(url);
+        setStudentPhotoUrls(current => ({...current, [activeStudent.code]: url}));
+      }
+      notifySuccess("Student photo updated", `${activeStudent.fullName}'s profile photo is now saved securely.`);
+    } catch (error) {
+      notifyError("Photo upload failed", error instanceof Error ? error.message : "The student photo could not be uploaded.");
+    } finally {
+      setPhotoUploading(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
 
   const uploadStudentDocument = async (event:React.FormEvent) => {
     event.preventDefault();
@@ -137,7 +200,7 @@ export function StudentDirectory() {
     try{
       const results=await Promise.allSettled(documentFiles.map(file=>DocumentService.upload({studentCode:activeStudent.code,category:documentForm.category,title:file.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' '),file,expiresOn:documentForm.expiresOn,notes:documentForm.notes})));
       const failures=results.filter(result=>result.status==="rejected") as PromiseRejectedResult[];
-      const records=await DocumentService.list();setStudentDocuments(records.filter(record=>record.studentCode===activeStudent.code));
+      const records=await DocumentService.list();setStudentDocuments(records.filter(record=>record.studentCode===activeStudent.code&&record.category!=="Profile Photo"));
       if(failures.length)throw new Error(`${results.length-failures.length} uploaded; ${failures.length} failed. ${failures[0].reason instanceof Error?failures[0].reason.message:"Check document permissions."}`);
       setDocumentFiles([]);setDocumentForm({title:"",category:"Passport & Identity",expiresOn:"",notes:""});setShowDocumentUpload(false);notifySuccess(`${results.length} document${results.length===1?"":"s"} uploaded`,`${activeStudent.fullName}'s secure document vault is now up to date.`);
     }catch(error){const message=error instanceof Error?error.message:"Document upload failed";setDocumentError(message);notifyError("Document upload failed",message)}finally{setDocumentSaving(false)}
@@ -185,10 +248,16 @@ export function StudentDirectory() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to archive this student record?")) return;
-    const updated = await StudentService.deleteStudent(id);
-    setStudents(updated as StudentRecord[]);
-    if (activeStudent?.id === id) setActiveStudent(null);
+    const student = students.find(record => record.id === id);
+    if (!confirm(`Permanently delete ${student?.fullName ?? "this student"} and their linked record? This cannot be undone.`)) return;
+    try {
+      const updated = await StudentService.deleteStudent(id);
+      setStudents(updated as StudentRecord[]);
+      if (activeStudent?.id === id) setActiveStudent(null);
+      notifySuccess("Student deleted", `${student?.fullName ?? "The student"} was removed successfully.`);
+    } catch (error) {
+      notifyError("Student could not be deleted", error instanceof Error ? error.message : "Please check your permissions and try again.");
+    }
   };
 
   const beginStudentEdit = (student: StudentRecord) => {
@@ -488,9 +557,12 @@ export function StudentDirectory() {
                               fontSize: "11.5px",
                               fontWeight: 700,
                               flexShrink: 0,
+                              overflow: "hidden",
                             }}
                           >
-                            {initials}
+                            {studentPhotoUrls[std.code]
+                              ? <img src={studentPhotoUrls[std.code]} alt="" style={{width:"100%",height:"100%",display:"block",objectFit:"cover"}} />
+                              : initials}
                           </div>
                           <div className="student-name-cell">
                             <strong style={{ fontSize: "13px" }}>{std.fullName}</strong>
@@ -697,6 +769,15 @@ export function StudentDirectory() {
           <div className={`slide-over-panel ${inspectorTab==="docs"?"student-documents-drawer":""}`} style={{ width: inspectorTab==="docs"?"min(780px, 100%)":"min(620px, 100%)" }} onClick={e => e.stopPropagation()}>
             {/* Drawer Header */}
             <div className="drawer-header">
+              <div className="student-profile-photo-wrap">
+                <div className="student-profile-photo">
+                  {studentPhotoUrl ? <img src={studentPhotoUrl} alt={`${activeStudent.fullName} profile`} /> : <span>{activeStudent.fullName.slice(0, 2).toUpperCase()}</span>}
+                </div>
+                <button type="button" onClick={()=>photoInputRef.current?.click()} disabled={photoUploading} aria-label={studentPhotoUrl?"Change student photo":"Upload student photo"} title={studentPhotoUrl?"Change student photo":"Upload student photo"}>
+                  <Camera size={13}/>
+                </button>
+                <input ref={photoInputRef} type="file" accept="image/jpeg,image/png" hidden onChange={event=>void handleStudentPhotoUpload(event.target.files?.[0])}/>
+              </div>
               <div className="drawer-header-info">
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                   <span className="account-code-cell" style={{ fontSize: "13px" }}>{activeStudent.code}</span>

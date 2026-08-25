@@ -162,7 +162,8 @@ export function IntakePicker({
               ? { bottom: "calc(100% + 6px)" }
               : { top: "calc(100% + 6px)" }),
             left: 0,
-            width: "310px",
+            width: "min(310px, calc(100vw - 32px))",
+            maxWidth: "100%",
             background: "var(--bg-card, #FFFFFF)",
             border: "1px solid var(--border-strong, #CBD5E1)",
             borderRadius: "10px",

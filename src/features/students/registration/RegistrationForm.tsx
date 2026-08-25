@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -45,16 +45,47 @@ const REGISTRATION_STEPS = [
   { step: 6, title: "Review & Submit", sub: "Summary & Verification", icon: CheckCircle2 },
 ];
 
+const REGISTRATION_DRAFT_KEY = "aecs_student_registration_draft_v1";
+const REGISTRATION_DRAFT_TTL_MS = 10 * 60 * 1000;
+const ACCEPTED_ENGLISH_TESTS = ["IELTS", "PTE", "Duolingo", "TOEFL", "GRE", "SAT"];
+
+function readRegistrationDraft() {
+  try {
+    const saved = sessionStorage.getItem(REGISTRATION_DRAFT_KEY);
+    if (!saved) return null;
+    const draft = JSON.parse(saved) as { currentStep?: number; formData?: Record<string, unknown>; updatedAt?: number };
+    if (!draft.updatedAt || Date.now() - draft.updatedAt >= REGISTRATION_DRAFT_TTL_MS) {
+      sessionStorage.removeItem(REGISTRATION_DRAFT_KEY);
+      return null;
+    }
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
 export function RegistrationForm() {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const savedStep = Number(readRegistrationDraft()?.currentStep ?? 1);
+    return Math.min(6, Math.max(1, savedStep));
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [createdStudent, setCreatedStudent] = useState<{ id: string; code: string; name: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const getDobError = (dob: string) => {
+    if (!dob) return "Date of birth is required.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob) || Number.isNaN(Date.parse(`${dob}T00:00:00`))) return "Enter a valid date of birth.";
+    if (dob > today) return "Date of birth cannot be in the future.";
+    if (dob < "1900-01-01") return "Enter a date of birth on or after 1 January 1900.";
+    return "";
+  };
 
   // Form State
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     // Step 1: Personal
     fullName: "",
     gender: "" as "Male" | "Female" | "Other",
@@ -103,7 +134,24 @@ export function RegistrationForm() {
     // Step 6: Referral & Initial Note
     leadSource: "",
     counsellorNotes: "",
-  });
+    ...(readRegistrationDraft()?.formData ?? {}),
+  }));
+
+  useEffect(() => {
+    const updatedAt = Date.now();
+    sessionStorage.setItem(REGISTRATION_DRAFT_KEY, JSON.stringify({ currentStep, formData, updatedAt }));
+    const expiryTimer = globalThis.setTimeout(() => {
+      sessionStorage.removeItem(REGISTRATION_DRAFT_KEY);
+      setCurrentStep(1);
+      setFormData(current => Object.fromEntries(Object.entries(current).map(([key, value]) => {
+        if (typeof value === "boolean") return [key, false];
+        if (key === "testStatus") return [key, "None"];
+        return [key, ""];
+      })) as typeof current);
+      setErrorMessage("");
+    }, REGISTRATION_DRAFT_TTL_MS);
+    return () => globalThis.clearTimeout(expiryTimer);
+  }, [currentStep, formData]);
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -112,8 +160,19 @@ export function RegistrationForm() {
   const handleNext = () => {
     setErrorMessage("");
     if (currentStep === 1) {
-      if (!formData.fullName.trim() || !formData.email.trim() || !formData.phone.trim()) {
+      if (!formData.fullName.trim() || !formData.email.trim() || !formData.phone.trim() || !formData.gender) {
         setErrorMessage("Please fill in all required personal contact details (*)");
+        return;
+      }
+      const dobError = getDobError(formData.dob);
+      if (dobError) {
+        setErrorMessage(dobError);
+        return;
+      }
+    }
+    if (currentStep === 4 && formData.testStatus === "Taken") {
+      if (!ACCEPTED_ENGLISH_TESTS.includes(formData.testType) || !formData.overallScore.trim()) {
+        setErrorMessage("Select the English test type and enter the overall score before continuing.");
         return;
       }
     }
@@ -130,8 +189,19 @@ export function RegistrationForm() {
   };
 
   const handleSubmit = async () => {
-    setIsSubmitting(true);
     setErrorMessage("");
+
+    const dobError = getDobError(formData.dob);
+    if (dobError) {
+      setErrorMessage(`${dobError} Go back to Step 1 and correct it before registering the student.`);
+      return;
+    }
+    if (formData.testStatus === "Taken" && (!ACCEPTED_ENGLISH_TESTS.includes(formData.testType) || !formData.overallScore.trim())) {
+      setErrorMessage("English test details are incomplete. Return to Step 4, select the test type, and enter the overall score.");
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
       const created = await StudentService.createStudent({
@@ -164,10 +234,18 @@ export function RegistrationForm() {
       setCreatedStudent({
         id: created.id,
         code: created.code,
-        name: created.fullName,
+        name: formData.fullName,
       });
+      sessionStorage.removeItem(REGISTRATION_DRAFT_KEY);
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to register student record.");
+      const message = err?.message || "Failed to register student record.";
+      setErrorMessage(
+        message.includes("students_dob_check")
+          ? "The date of birth is not valid. Return to Step 1 and choose a date that is not in the future."
+          : message.includes("english_test_details")
+            ? "English test details are incomplete or invalid. Return to Step 4, select an accepted test type, and enter the overall score."
+            : message
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -392,6 +470,8 @@ export function RegistrationForm() {
                     required
                     value={formData.dob}
                     onChange={e => handleChange("dob", e.target.value)}
+                    min="1900-01-01"
+                    max={today}
                   />
                 </div>
                 <div className="form-group">
@@ -460,7 +540,7 @@ export function RegistrationForm() {
                     onChange={e => handleChange("highestQualification", e.target.value)}
                   >
                     <option value="+2 / Higher Secondary (NEB)">+2 / Higher Secondary (NEB)</option>
-                    <option value="A-Levels (Cambridge)">A-Levels (Cambridge)</option>
+                    <option value="Diploma">Diploma</option>
                     <option value="Bachelor's Degree">Bachelor's Degree</option>
                     <option value="Master's Degree">Master's Degree</option>
                   </select>
@@ -591,12 +671,17 @@ export function RegistrationForm() {
                 </div>
                 <div className="form-group">
                   <label>Estimated Annual Budget *</label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.budgetNpr}
                     onChange={e => handleChange("budgetNpr", e.target.value)}
-                    placeholder="e.g. NPR 25-35 Lakhs / year"
-                  />
+                    required
+                  >
+                    <option value="">Select an option</option>
+                    <option value="Below 10 Lakhs">Below 10 Lakhs</option>
+                    <option value="10-20 Lakhs">10-20 Lakhs</option>
+                    <option value="20-30 Lakhs">20-30 Lakhs</option>
+                    <option value="30+ Lakhs">30+ Lakhs</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -625,11 +710,13 @@ export function RegistrationForm() {
                     value={formData.testType}
                     onChange={e => handleChange("testType", e.target.value)}
                   >
-                    <option value="IELTS Academic">IELTS Academic</option>
-                    <option value="PTE Academic">PTE Academic</option>
+                    <option value="">Select test type</option>
+                    <option value="IELTS">IELTS Academic</option>
+                    <option value="PTE">PTE Academic</option>
                     <option value="Duolingo">Duolingo English Test (DET)</option>
-                    <option value="TOEFL iBT">TOEFL iBT</option>
-                    <option value="German Language (A1/A2)">German Language (A1/A2)</option>
+                    <option value="TOEFL">TOEFL iBT</option>
+                    <option value="GRE">GRE</option>
+                    <option value="SAT">SAT</option>
                   </select>
                 </div>
               </div>
