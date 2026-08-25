@@ -10,6 +10,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { CaseTaskPanel } from "./CaseTaskPanel";
 import { KpiTrendIndicator } from "../../components/common/KpiTrendIndicator";
 import { CountryDisplay } from "../../components/ui/CountryDisplay";
+import { StudentSelect } from "../../components/ui/StudentSelect";
 import { StudentDirectoryRecord, StudentService } from "../../services/studentService";
 import { DocumentRecord, DocumentService } from "../../services/documentService";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
@@ -88,7 +89,6 @@ export function ApplicationWorkspace() {
   const [destinationFilter, setDestinationFilter] = useState("ALL");
   const [stageFilter, setStageFilter] = useState("ALL");
   const [students, setStudents] = useState<StudentDirectoryRecord[]>([]);
-  const [studentSearch, setStudentSearch] = useState("");
   const [catalogDestinations, setCatalogDestinations] = useState<ApplicationDestination[]>([]);
   const [catalogUniversities, setCatalogUniversities] = useState<ApplicationUniversity[]>([]);
   const [useUnlistedUniversity, setUseUnlistedUniversity] = useState(false);
@@ -129,7 +129,6 @@ export function ApplicationWorkspace() {
       course: "", intake: "", stage: "SUBMITTED", deadline: "", officer: profile?.full_name || "",
       tuitionFee: "", scholarship: "", notes: "",
     });
-    setStudentSearch("");
     setApplicationFormStep(1);
     setEditingApplicationId(null);
     setApplicationFormError("");
@@ -158,7 +157,6 @@ export function ApplicationWorkspace() {
   const openApplicationEdit = (application: UniversityApplication) => {
     setEditingApplicationId(application.id);
     setApplicationFormError("");
-    setStudentSearch(`${application.studentName} · ${application.studentCode}`);
     setNewAppForm({
       studentCode: application.studentCode,
       studentName: application.studentName,
@@ -298,12 +296,7 @@ export function ApplicationWorkspace() {
     }).filter(Boolean))).sort();
   }, [newAppForm.universityName, universitiesForCountry]);
 
-  const selectStudent = (value: string) => {
-    setStudentSearch(value);
-    const selected = students.find(student => `${student.fullName} · ${student.code}` === value || student.code === value);
-    if (!selected) return;
-    setNewAppForm(current => ({ ...current, studentName: selected.fullName, studentCode: selected.code }));
-  };
+  const selectedApplicationStudent = students.find(student => student.code === newAppForm.studentCode);
 
   const selectDestination = (countryName: string) => {
     const destination = catalogDestinations.find(item => item.name === countryName);
@@ -957,12 +950,14 @@ export function ApplicationWorkspace() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="modal-dialog-clean"
-              style={{ maxWidth: "640px" }}
+              className="modal-dialog-clean application-modal-professional"
+              style={{ maxWidth: "700px" }}
               onClick={e => e.stopPropagation()}
             >
-              <div className="modal-header-clean">
-                <div>
+              <div className="modal-header-clean application-modal-header">
+                <div className="application-modal-heading">
+                  <span><PlaneTakeoff size={19}/></span>
+                  <div>
                   <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
                     {editingApplicationId ? "Edit University Application" : "Submit New University Application"}
                   </h3>
@@ -971,6 +966,7 @@ export function ApplicationWorkspace() {
                       ? "Update the student, study plan, financial details, deadline, and compliance notes"
                       : "Record formal application lodgement, offer deadlines, and scholarship assessments"}
                   </p>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -987,18 +983,17 @@ export function ApplicationWorkspace() {
                 </div>
                 <div className="modal-body-clean application-form-modern">
                   {applicationFormStep === 1 && <section className="application-form-section application-wizard-page">
-                    <header><span>1</span><div><strong>Select student</strong><small>Search the registered student directory. The AECS code fills automatically.</small></div></header>
-                    <div className="form-row-2">
-                      <div className="form-group">
-                        <label>Search student *</label>
-                        <input list="application-students" required value={studentSearch} onChange={event => selectStudent(event.target.value)} placeholder="Search by student name or AECS code" autoComplete="off" />
-                        <datalist id="application-students">{students.map(student => <option key={student.id} value={`${student.fullName} · ${student.code}`}>{student.email}</option>)}</datalist>
-                      </div>
-                      <div className="form-group">
-                        <label>Student Code / ID</label>
-                        <input className="application-readonly-field" readOnly required value={newAppForm.studentCode} placeholder="Filled after selecting a student" />
-                      </div>
+                    <header><span>1</span><div><strong>Choose the applicant</strong><small>Search the live student directory and link this application to the correct CRM profile.</small></div></header>
+                    <div className="form-group application-student-field">
+                      <label>Registered Student *</label>
+                      <StudentSelect students={students} value={newAppForm.studentCode} loading={loading} onChange={selected => setNewAppForm(current => ({ ...current, studentName: selected?.fullName ?? "", studentCode: selected?.code ?? "" }))}/>
                     </div>
+                    {selectedApplicationStudent ? <div className="application-selected-student">
+                      <span className="application-selected-avatar">{selectedApplicationStudent.fullName.slice(0,1).toUpperCase()}</span>
+                      <div><small>SELECTED APPLICANT</small><strong>{selectedApplicationStudent.fullName}</strong><span>{selectedApplicationStudent.code}</span></div>
+                      <dl><div><dt>Email</dt><dd>{selectedApplicationStudent.email || "Not recorded"}</dd></div><div><dt>Current plan</dt><dd>{selectedApplicationStudent.targetCountry || "Undecided"} · {selectedApplicationStudent.targetCourse || "Course undecided"}</dd></div></dl>
+                      <CheckCircle2 size={19}/>
+                    </div> : <div className="application-student-guidance"><Search size={17}/><div><strong>Find the correct student profile</strong><span>Type a name, AECS code, phone number, or email address. No application data is created until the final step.</span></div></div>}
                   </section>}
 
                   {applicationFormStep === 2 && <section className="application-form-section application-wizard-page">
