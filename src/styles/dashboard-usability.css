@@ -15,10 +15,45 @@
   letter-spacing: -.015em;
 }
 
-.brand-text span,
 .hub-status .hub-address {
   font-size: 12px;
   line-height: 1.35;
+}
+
+.sidebar-brand {
+  min-height: 112px;
+  gap: 12px;
+  padding: 16px;
+}
+
+.sidebar-logo {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .2);
+}
+
+.brand-text {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 5px;
+}
+
+.brand-text strong {
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+.brand-text span {
+  max-width: 100%;
+  margin-top: 0;
+  color: #adc1de;
+  font-size: 8.5px;
+  line-height: 1.35;
+  white-space: normal;
 }
 
 .hub-status strong {
