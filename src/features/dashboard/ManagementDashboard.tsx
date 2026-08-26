@@ -32,44 +32,32 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { AECS_ORGANIZATION } from "../../config/organization";
 import { HrmsService } from "../../services/hrmsService";
+import {
+  DashboardService,
+  type DashboardActivity,
+  type DashboardAppointment,
+  type DashboardDestination,
+  type DashboardTrendPoint,
+} from "../../services/dashboardService";
 import { useAuth } from "../auth/AuthProvider";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
-
-// Trend series for 30-day analytics
-const INTAKE_TREND_DATA: Array<{ day: string; leads: number; applications: number }> = [];
-const DESTINATION_DATA: Array<{ name: string; value: number; color: string }> = [];
-
-interface DashboardAppointment {
-  id: string;
-  time: string;
-  studentName: string;
-  target: string;
-  counsellor: string;
-  status: string;
-}
-
-interface DashboardActivity {
-  id: string;
-  type: "visa" | "offer" | "invoice" | "student";
-  title: string;
-  desc: string;
-  time: string;
-  user: string;
-}
 
 interface DashboardLeave {
   id: string;
   status: string;
 }
 
-const TODAY_APPOINTMENTS: DashboardAppointment[] = [];
-const RECENT_ACTIVITIES: DashboardActivity[] = [];
-
 export function ManagementDashboard() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const [totalStudents, setTotalStudents] = useState(0);
   const [summary, setSummary] = useState({ counselling: 0, offers: 0, visaRatio: 0, revenue: 0 });
+  const [trendData, setTrendData] = useState<DashboardTrendPoint[]>([]);
+  const [destinations, setDestinations] = useState<DashboardDestination[]>([]);
+  const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
+  const [activities, setActivities] = useState<DashboardActivity[]>([]);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [dashboardError, setDashboardError] = useState("");
   const [attendanceBusy, setAttendanceBusy] = useState(false);
   const [attendanceMessage, setAttendanceMessage] = useState("");
@@ -134,38 +122,36 @@ export function ManagementDashboard() {
     let active = true;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const loadSummary = async () => {
-      const { data, error } = await supabase.rpc("management_dashboard_summary");
+    const loadDashboard = async () => {
+      const [summaryResult, operationalResult] = await Promise.allSettled([
+        supabase.rpc("management_dashboard_summary"),
+        DashboardService.getOperationalData(),
+      ]);
       if (!active) return;
-      if (error) {
+      if (summaryResult.status === "rejected" || summaryResult.value.error) {
         setDashboardError("Live dashboard data could not be loaded. Check your connection or ask an administrator to verify your permissions.");
-        return;
+      } else {
+        const live=summaryResult.value.data as{students?:number;counselling?:number;offers?:number;visa_ratio?:number;month_revenue?:number};
+        setTotalStudents(live.students || 0);
+        setSummary({ counselling: live.counselling || 0, offers: live.offers || 0, visaRatio: live.visa_ratio || 0, revenue: live.month_revenue || 0 });
+        setDashboardError("");
       }
-      const live=data as{students?:number;counselling?:number;offers?:number;visa_ratio?:number;month_revenue?:number};
-      const nextMetrics = {
-        students: live.students || 0,
-        counselling: live.counselling || 0,
-        offers: live.offers || 0,
-        visaRatio: live.visa_ratio || 0,
-        revenue: live.month_revenue || 0,
-      };
-      setTotalStudents(nextMetrics.students);
-      setSummary({
-        counselling: nextMetrics.counselling,
-        offers: nextMetrics.offers,
-        visaRatio: nextMetrics.visaRatio,
-        revenue: nextMetrics.revenue,
-      });
-      setDashboardError("");
+      if (operationalResult.status === "fulfilled") {
+        setTrendData(operationalResult.value.trend);
+        setDestinations(operationalResult.value.destinations);
+        setAppointments(operationalResult.value.appointments);
+        setActivities(operationalResult.value.activities);
+      }
+      setDashboardLoading(false);
     };
 
     const scheduleRefresh = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => void loadSummary(), 250);
+      refreshTimer = setTimeout(() => void loadDashboard(), 250);
     };
 
-    void loadSummary();
-    const channel = ["students", "counselling_records", "university_applications", "visa_tracking", "finance_receipts"]
+    void loadDashboard();
+    const channel = ["students", "study_preferences", "leads", "lead_follow_ups", "lead_activities", "activity_logs", "audit_logs", "counselling_records", "university_applications", "visa_tracking", "finance_receipts"]
       .reduce((subscription, table) => subscription.on("postgres_changes", { event: "*", schema: "public", table }, scheduleRefresh), supabase.channel("management-dashboard-live"))
       .subscribe();
 
@@ -174,7 +160,7 @@ export function ManagementDashboard() {
       if (refreshTimer) clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [dashboardRefreshKey]);
 
   useEffect(() => { void loadMyAttendance(); }, []);
   useEffect(() => { void loadMyLeaves(); }, [canRequestLeave]);
@@ -220,7 +206,7 @@ export function ManagementDashboard() {
             <strong>Dashboard unavailable</strong>
             <span>{dashboardError}</span>
           </div>
-          <button type="button" onClick={() => window.location.reload()}>Retry</button>
+          <button type="button" onClick={() => { setDashboardLoading(true); setDashboardRefreshKey(value => value + 1); }}>Retry</button>
         </div>
       )}
 
@@ -281,7 +267,7 @@ export function ManagementDashboard() {
       <div className="metrics-grid-4" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
         <div className="metric-box">
           <div className="metric-header">
-            <span className="metric-label">Active Student Leads</span>
+            <span className="metric-label">Registered Students</span>
             <div className="metric-icon-wrap blue">
               <Users size={17} />
             </div>
@@ -348,8 +334,8 @@ export function ManagementDashboard() {
           </div>
 
           <div className="panel-body" style={{ height: "300px" }}>
-            {INTAKE_TREND_DATA.length > 0 ? <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={INTAKE_TREND_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            {trendData.some(item => item.leads > 0 || item.applications > 0) ? <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#F97316" stopOpacity={0.25} />
@@ -376,7 +362,7 @@ export function ManagementDashboard() {
                 <Area type="monotone" dataKey="leads" name="New Inquiries" stroke="#F97316" strokeWidth={2.5} fillOpacity={1} fill="url(#colorLeads)" />
                 <Area type="monotone" dataKey="applications" name="Uni Applications" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorApps)" />
               </AreaChart>
-            </ResponsiveContainer> : <div className="dashboard-empty-state">Trend data will appear after leads and applications are recorded.</div>}
+            </ResponsiveContainer> : <div className="dashboard-empty-state">{dashboardLoading ? "Loading 30-day intake activity…" : "Trend data will appear after leads and applications are recorded."}</div>}
           </div>
         </div>
 
@@ -398,7 +384,7 @@ export function ManagementDashboard() {
           </div>
 
           <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-            {TODAY_APPOINTMENTS.map(item => (
+            {appointments.map(item => (
               <div
                 key={item.id}
                 style={{
@@ -444,7 +430,7 @@ export function ManagementDashboard() {
                 </span>
               </div>
             ))}
-            {TODAY_APPOINTMENTS.length === 0 && <div className="dashboard-empty-state">No counselling appointments scheduled for today.</div>}
+            {appointments.length === 0 && <div className="dashboard-empty-state">{dashboardLoading ? "Loading today's follow-ups…" : "No counselling appointments scheduled for today."}</div>}
           </div>
         </div>
       </div>
@@ -463,7 +449,7 @@ export function ManagementDashboard() {
 
           <div className="panel-body">
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {DESTINATION_DATA.map(d => (
+              {destinations.map(d => (
                 <div key={d.name} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
                     <strong style={{ color: "var(--text-main)" }}>{d.name}</strong>
@@ -490,7 +476,7 @@ export function ManagementDashboard() {
                   </div>
                 </div>
               ))}
-              {DESTINATION_DATA.length === 0 && <div className="dashboard-empty-state">Destination preferences will appear after student intake records are added.</div>}
+              {destinations.length === 0 && <div className="dashboard-empty-state">{dashboardLoading ? "Loading destination preferences…" : "Destination preferences will appear after student intake records are added."}</div>}
             </div>
           </div>
         </div>
@@ -506,7 +492,7 @@ export function ManagementDashboard() {
           </div>
 
           <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            {RECENT_ACTIVITIES.map(act => (
+            {activities.map(act => (
               <div
                 key={act.id}
                 style={{
@@ -566,7 +552,7 @@ export function ManagementDashboard() {
                 </div>
               </div>
             ))}
-            {RECENT_ACTIVITIES.length === 0 && <div className="dashboard-empty-state">No operational activity has been recorded yet.</div>}
+            {activities.length === 0 && <div className="dashboard-empty-state">{dashboardLoading ? "Loading recent CRM activity…" : "No operational activity has been recorded yet."}</div>}
           </div>
         </div>
       </div>
