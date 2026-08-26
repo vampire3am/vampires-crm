@@ -1,0 +1,286 @@
+/* Dashboard usability consolidation: shared type, radius, action and layout rules. */
+.app-topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.topbar-breadcrumb h1 {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -.015em;
+}
+
+.brand-text span,
+.hub-status .hub-address {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.hub-status strong {
+  display: block;
+  color: #fff;
+  font-size: 12px;
+}
+
+.dashboard-workspace {
+  --dashboard-radius-control: 8px;
+  --dashboard-radius-card: 10px;
+}
+
+.dashboard-page-header {
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 14px;
+}
+
+.dashboard-page-header .page-header-titles {
+  max-width: 720px;
+}
+
+.dashboard-page-header .page-header-titles h2 {
+  font-size: 18px;
+}
+
+.dashboard-page-header .page-header-actions {
+  margin-left: 8px;
+}
+
+.dashboard-workspace :where(.btn-primary, .btn-secondary, .btn-ghost, .dashboard-shortcut),
+.dashboard-workspace :where(.metric-box, .crm-panel, .dashboard-attendance-card) {
+  border-radius: var(--dashboard-radius-control);
+}
+
+.dashboard-attendance-card {
+  grid-template-columns: auto minmax(300px, 720px) auto;
+  justify-content: start;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--primary-navy-light);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.dashboard-attendance-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--dashboard-radius-control);
+}
+
+.dashboard-attendance-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dashboard-attendance-identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.dashboard-attendance-identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-attendance-copy > span:not(.dashboard-attendance-label),
+.dashboard-attendance-copy small,
+.dashboard-metric-footer {
+  font-size: 12px;
+}
+
+.dashboard-leave-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.dashboard-leave-inline strong {
+  color: var(--text-main);
+  font-size: inherit;
+}
+
+.dashboard-leave-inline button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  margin-left: 2px;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--dashboard-radius-control);
+  color: var(--text-muted);
+  background: var(--bg-card-subtle);
+}
+
+.dashboard-leave-inline button:hover,
+.dashboard-leave-inline button:focus-visible {
+  color: var(--text-main);
+  border-color: var(--border-strong);
+}
+
+.dashboard-clock-action {
+  color: var(--primary-navy-light);
+  border-color: var(--primary-navy-light);
+  background: var(--bg-card);
+}
+
+.dashboard-metric-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+  color: var(--text-muted);
+  font-weight: 650;
+}
+
+.dashboard-metric-footer svg {
+  flex: 0 0 auto;
+  color: var(--text-subtle);
+}
+
+.dashboard-content-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.panel-static-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.live-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.dashboard-empty-state {
+  display: grid;
+  min-height: 150px;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.dashboard-empty-state::before {
+  content: "";
+  width: min(220px, 72%);
+  height: 54px;
+  border-radius: var(--dashboard-radius-control);
+  opacity: .72;
+  background:
+    linear-gradient(145deg, transparent 46%, var(--border-strong) 47% 50%, transparent 51%) 0 0 / 54px 54px,
+    linear-gradient(to top, var(--bg-card-subtle) 0 12px, transparent 12px 100%);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dashboard-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.dashboard-shortcut {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.dashboard-shortcut:hover,
+.dashboard-shortcut:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--bg-card-subtle);
+}
+
+.dashboard-shortcut .metric-icon-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--dashboard-radius-control);
+}
+
+.dashboard-shortcut > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.dashboard-shortcut strong {
+  overflow: hidden;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-shortcut small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.dashboard-shortcut > svg {
+  color: var(--text-subtle);
+}
+
+@media (max-width: 1100px) {
+  .dashboard-attendance-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dashboard-attendance-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 820px) {
+  .dashboard-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dashboard-page-header .page-header-actions {
+    margin-left: 0;
+  }
+
+  .dashboard-content-grid,
+  .dashboard-shortcuts {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar-breadcrumb h1 { font-size: 17px; }
+  .dashboard-attendance-card { grid-template-columns: 1fr; }
+  .dashboard-attendance-icon { display: none; }
+  .dashboard-attendance-actions { grid-column: 1; }
+}

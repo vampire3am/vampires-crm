@@ -42,6 +42,7 @@ import "./styles/crm-notifications.css";
 import "./styles/directory-tables.css";
 import "./styles/university-course-manager.css";
 import "./styles/lead-conversion-dialog.css";
+import "./styles/dashboard-usability.css";
 import { ErrorBoundary } from "./core/error/ErrorBoundary";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

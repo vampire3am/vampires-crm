@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  Activity,
   AlertTriangle,
   CalendarDays,
   BookOpen,
@@ -20,8 +21,8 @@ import {
   FileCheck2,
   GraduationCap,
   PlaneTakeoff,
-  Plus,
   Receipt,
+  RefreshCw,
   TrendingUp,
   UserPlus,
   Users,
@@ -29,7 +30,6 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
-import { KpiTrendIndicator } from "../../components/common/KpiTrendIndicator";
 import { AECS_ORGANIZATION } from "../../config/organization";
 import { HrmsService } from "../../services/hrmsService";
 import { useAuth } from "../auth/AuthProvider";
@@ -186,10 +186,14 @@ export function ManagementDashboard() {
     return `${Math.floor(minutes/60)}h ${minutes%60}m`;
   })() : "0h 0m";
 
+  const metricFooter = (label: string) => (
+    <span className="dashboard-metric-footer"><Activity size={13} aria-hidden="true" /><span>{label}</span></span>
+  );
+
   return (
-    <div className="page-container">
+    <div className="page-container dashboard-workspace">
       {/* Executive Welcome Header */}
-      <div className="page-header-row">
+      <div className="page-header-row dashboard-page-header">
         <div className="page-header-titles">
           <h2>Executive Operations Hub</h2>
           <p>
@@ -205,14 +209,6 @@ export function ManagementDashboard() {
           >
             <UserPlus size={15} />
             <span>Student Registration</span>
-          </button>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => navigate("/leads", { state: { openLeadCapture: true } })}
-          >
-            <Plus size={15} />
-            <span>Quick Lead</span>
           </button>
         </div>
       </div>
@@ -231,8 +227,13 @@ export function ManagementDashboard() {
       <section className="dashboard-attendance-card" aria-label="My attendance today">
         <div className="dashboard-attendance-icon"><Clock size={22} /></div>
         <div className="dashboard-attendance-copy">
-          <span className="page-category-eyebrow">My Attendance Today</span>
-          <strong>{myAttendance ? myAttendance.fullName : "Employee attendance"}</strong>
+          <span className="dashboard-attendance-label">Attendance today</span>
+          <div className="dashboard-attendance-identity">
+            <strong>{myAttendance ? myAttendance.fullName : "Employee attendance"}</strong>
+            <span className={`badge-status ${myAttendance?.clockOut ? "enrolled" : myAttendance?.clockIn ? "counselling" : "new-lead"}`}>
+              {myAttendance?.clockOut ? "Shift complete" : myAttendance?.clockIn ? "In office" : "Not clocked in"}
+            </span>
+          </div>
           <span>
             {!myAttendance ? (attendanceLoadError || "No active employee profile is linked to this login.") :
              !myAttendance.clockIn ? "Shift not started — clock in when you begin work." :
@@ -240,24 +241,25 @@ export function ManagementDashboard() {
              `Working now · ${workedToday} worked · Clocked in at ${new Date(myAttendance.clockIn).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",timeZone:"Asia/Kathmandu"})}`}
           </span>
           {attendanceMessage && <small>{attendanceMessage}</small>}
-        </div>
-        <div className="dashboard-attendance-status">
-          <span className={`badge-status ${myAttendance?.clockOut ? "enrolled" : myAttendance?.clockIn ? "counselling" : "new-lead"}`}>
-            {myAttendance?.clockOut ? "SHIFT COMPLETE" : myAttendance?.clockIn ? "IN OFFICE" : "NOT CLOCKED IN"}
-          </span>
+          {canRequestLeave && (
+            <div className="dashboard-leave-inline" aria-live="polite">
+              <CalendarDays size={14} aria-hidden="true" />
+              <span>Leave:</span>
+              <strong>{myLeaves.filter(item=>item.status==="PENDING").length} pending</strong>
+              <span aria-hidden="true">·</span>
+              <span>{myLeaves.filter(item=>item.status==="APPROVED").length} approved</span>
+              <span aria-hidden="true">·</span>
+              <span>{myLeaves.filter(item=>item.status==="REJECTED").length} rejected</span>
+              <button type="button" onClick={()=>void loadMyLeaves()} aria-label="Refresh leave request status"><RefreshCw size={13}/></button>
+            </div>
+          )}
         </div>
         <div className="dashboard-attendance-actions">
-          <button type="button" className="btn-primary" disabled={attendanceBusy || !myAttendance || Boolean(myAttendance.clockIn)} onClick={() => void punchAttendance("in")}><Clock size={15}/> Clock In</button>
+          <button type="button" className="btn-secondary dashboard-clock-action" disabled={attendanceBusy || !myAttendance || Boolean(myAttendance.clockIn)} onClick={() => void punchAttendance("in")}><Clock size={15}/> Clock In</button>
           <button type="button" className="btn-secondary" disabled={attendanceBusy || !myAttendance?.clockIn || Boolean(myAttendance.clockOut)} onClick={() => void punchAttendance("out")}><CheckCircle2 size={15}/> Clock Out</button>
           {canRequestLeave && <button type="button" className="btn-secondary dashboard-leave-button" onClick={openLeaveModal}><CalendarDays size={15}/> Request Leave</button>}
         </div>
       </section>
-
-      {canRequestLeave && <section className="dashboard-leave-strip" aria-label="My leave requests">
-        <div className="dashboard-leave-strip-icon"><CalendarDays size={18}/></div>
-        <div><span>My leave requests</span><strong>{myLeaves.filter(item=>item.status==="PENDING").length} pending</strong><small>{myLeaves.length ? `${myLeaves.filter(item=>item.status==="APPROVED").length} approved · ${myLeaves.filter(item=>item.status==="REJECTED").length} rejected` : "No leave applications submitted yet"}</small></div>
-        <button type="button" className="btn-ghost" onClick={()=>void loadMyLeaves()}><span>Refresh status</span><ChevronRight size={14}/></button>
-      </section>}
 
       {showLeaveModal && canRequestLeave && <div className="modal-backdrop-clean" onClick={()=>setShowLeaveModal(false)}>
         <div className="modal-dialog-clean dashboard-leave-modal" onClick={event=>event.stopPropagation()}>
@@ -285,7 +287,7 @@ export function ManagementDashboard() {
             </div>
           </div>
           <div className="metric-value">{totalStudents}</div>
-          <KpiTrendIndicator metricKey="dashboard.students" value={totalStudents} label="Live registered records" />
+          {metricFooter("Live registered records")}
         </div>
 
         <div className="metric-box">
@@ -296,7 +298,7 @@ export function ManagementDashboard() {
             </div>
           </div>
           <div className="metric-value">{summary.counselling}</div>
-          <KpiTrendIndicator metricKey="dashboard.counselling" value={summary.counselling} label="Recorded counselling sessions" />
+          {metricFooter("Recorded counselling sessions")}
         </div>
 
         <div className="metric-box">
@@ -307,7 +309,7 @@ export function ManagementDashboard() {
             </div>
           </div>
           <div className="metric-value">{summary.offers}</div>
-          <KpiTrendIndicator metricKey="dashboard.offers" value={summary.offers} label="Offer and post-offer stages" />
+          {metricFooter("Offer and post-offer stages")}
         </div>
 
         <div className="metric-box">
@@ -318,7 +320,7 @@ export function ManagementDashboard() {
             </div>
           </div>
           <div className="metric-value">{summary.visaRatio.toFixed(1)}%</div>
-          <KpiTrendIndicator metricKey="dashboard.visa-ratio" value={summary.visaRatio} label="Based on recorded decisions" />
+          {metricFooter("Based on recorded decisions")}
         </div>
 
         <div className="metric-box">
@@ -329,12 +331,12 @@ export function ManagementDashboard() {
             </div>
           </div>
           <div className="metric-value">₨ {summary.revenue.toLocaleString("en-NP")}</div>
-          <KpiTrendIndicator metricKey="dashboard.month-revenue" value={summary.revenue} label="Paid invoices this month" />
+          {metricFooter("Paid invoices this month")}
         </div>
       </div>
 
       {/* Main Grid: Charts & Operations Agenda */}
-      <div className="grid-2col" style={{ gridTemplateColumns: "1.45fr 1fr", marginBottom: "24px" }}>
+      <div className="grid-2col dashboard-content-grid">
         {/* Left: 30-Day Lead & Intake Trajectory */}
         <div className="crm-panel" style={{ marginBottom: 0 }}>
           <div className="panel-header-bar">
@@ -342,7 +344,7 @@ export function ManagementDashboard() {
               <h3>30-Day Intake & Application Trajectory</h3>
               <p>Daily volume of prospective inquiries, university applications, and class intakes</p>
             </div>
-            <span className="status-pill">Asia/Kathmandu (UTC+05:45)</span>
+            <span className="panel-static-label">Asia/Kathmandu (UTC+05:45)</span>
           </div>
 
           <div className="panel-body" style={{ height: "300px" }}>
@@ -448,7 +450,7 @@ export function ManagementDashboard() {
       </div>
 
       {/* Bottom Grid: Market Distribution & Recent Activity Stream */}
-      <div className="grid-2col" style={{ gridTemplateColumns: "1fr 1.45fr" }}>
+      <div className="grid-2col dashboard-content-grid">
         {/* Left: Destination Market Distribution */}
         <div className="crm-panel">
           <div className="panel-header-bar">
@@ -456,7 +458,7 @@ export function ManagementDashboard() {
               <h3>Destination Preference</h3>
               <p>Top study abroad countries among active applicants</p>
             </div>
-            <span className="status-pill">2026/27 Intake</span>
+            <span className="panel-static-label">2026/27 intake</span>
           </div>
 
           <div className="panel-body">
@@ -500,7 +502,7 @@ export function ManagementDashboard() {
               <h3>Live Operations Stream</h3>
               <p>Auditable log of admissions, visa grants, and billing transactions</p>
             </div>
-            <span className="status-pill">Live Feed</span>
+            <span className="panel-static-label"><span className="live-indicator" aria-hidden="true" />Live feed</span>
           </div>
 
           <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -569,86 +571,22 @@ export function ManagementDashboard() {
         </div>
       </div>
 
-      {/* Fast Navigation Workspace Cards */}
-      <div className="metrics-grid-4" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
-        <button
-          type="button"
-          className="metric-box"
-          style={{ cursor: "pointer", textAlign: "left" }}
-          onClick={() => navigate("/students")}
-        >
-          <div className="metric-icon-wrap blue">
-            <Users size={17} />
-          </div>
-          <strong style={{ fontSize: "12.5px", marginTop: "4px" }}>Students & Leads</strong>
-          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Directory & Kanban</span>
-        </button>
-
-        <button
-          type="button"
-          className="metric-box"
-          style={{ cursor: "pointer", textAlign: "left" }}
-          onClick={() => navigate("/counselling")}
-        >
-          <div className="metric-icon-wrap amber">
-            <BookOpen size={17} />
-          </div>
-          <strong style={{ fontSize: "12.5px", marginTop: "4px" }}>Counselling Hub</strong>
-          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Notes & Follow-ups</span>
-        </button>
-
-        <button
-          type="button"
-          className="metric-box"
-          style={{ cursor: "pointer", textAlign: "left" }}
-          onClick={() => navigate("/applications")}
-        >
-          <div className="metric-icon-wrap purple">
-            <PlaneTakeoff size={17} />
-          </div>
-          <strong style={{ fontSize: "12.5px", marginTop: "4px" }}>Applications & Visas</strong>
-          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Offers & CAS/I-20</span>
-        </button>
-
-        <button
-          type="button"
-          className="metric-box"
-          style={{ cursor: "pointer", textAlign: "left" }}
-          onClick={() => navigate("/documents")}
-        >
-          <div className="metric-icon-wrap blue">
-            <FileCheck2 size={17} />
-          </div>
-          <strong style={{ fontSize: "12.5px", marginTop: "4px" }}>Document Desk</strong>
-          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>10-Point Checklist</span>
-        </button>
-
-        <button
-          type="button"
-          className="metric-box"
-          style={{ cursor: "pointer", textAlign: "left" }}
-          onClick={() => navigate("/classes")}
-        >
-          <div className="metric-icon-wrap green">
-            <GraduationCap size={17} />
-          </div>
-          <strong style={{ fontSize: "12.5px", marginTop: "4px" }}>Classes & Batches</strong>
-          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>IELTS / PTE / German</span>
-        </button>
-
-        <button
-          type="button"
-          className="metric-box"
-          style={{ cursor: "pointer", textAlign: "left" }}
-          onClick={() => navigate("/finance")}
-        >
-          <div className="metric-icon-wrap amber">
-            <CreditCard size={17} />
-          </div>
-          <strong style={{ fontSize: "12.5px", marginTop: "4px" }}>Finance & COA</strong>
-          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>454 Master Ledgers</span>
-        </button>
-      </div>
+      <nav className="dashboard-shortcuts" aria-label="Workspace shortcuts">
+        {[
+          { label: "Students & Leads", detail: "Directory & Kanban", path: "/students", icon: <Users size={17} />, tone: "blue" },
+          { label: "Counselling Hub", detail: "Notes & follow-ups", path: "/counselling", icon: <BookOpen size={17} />, tone: "amber" },
+          { label: "Applications & Visas", detail: "Offers & CAS/I-20", path: "/applications", icon: <PlaneTakeoff size={17} />, tone: "purple" },
+          { label: "Document Desk", detail: "Compliance checklist", path: "/documents", icon: <FileCheck2 size={17} />, tone: "blue" },
+          { label: "Classes & Batches", detail: "IELTS / PTE / German", path: "/classes", icon: <GraduationCap size={17} />, tone: "green" },
+          { label: "Finance & COA", detail: "Ledgers & receipts", path: "/finance", icon: <CreditCard size={17} />, tone: "amber" },
+        ].map(item => (
+          <button type="button" className="dashboard-shortcut" key={item.path} onClick={() => navigate(item.path)}>
+            <span className={`metric-icon-wrap ${item.tone}`}>{item.icon}</span>
+            <span><strong>{item.label}</strong><small>{item.detail}</small></span>
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

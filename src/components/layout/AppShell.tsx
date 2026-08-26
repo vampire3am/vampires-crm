@@ -482,8 +482,8 @@ export function AppShell() {
           <div className="hub-status">
             <span className="hub-dot" />
             <div>
-              <strong style={{ fontSize: "11.5px", color: "#FFFFFF", display: "block" }}>{AECS_ORGANIZATION.officeName}</strong>
-              <span style={{ fontSize: "10px", color: "#94A3B8" }}>Purano Buspark, Bagbazar · NPR</span>
+              <strong>{AECS_ORGANIZATION.officeName}</strong>
+              <span className="hub-address">Purano Buspark, Bagbazar · NPR</span>
             </div>
           </div>
         </div>
@@ -493,6 +493,7 @@ export function AppShell() {
       <div className="app-main">
         {/* Topbar */}
         <header className="app-topbar">
+          <div className="app-topbar-inner">
           <div className="topbar-left">
             <button
               type="button"
@@ -670,6 +671,7 @@ export function AppShell() {
                 </div>
               )}
             </div>
+          </div>
           </div>
         </header>
 
