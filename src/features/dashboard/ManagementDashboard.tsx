@@ -322,18 +322,21 @@ export function ManagementDashboard() {
       </div>
 
       {/* Main Grid: Charts & Operations Agenda */}
-      <div className="grid-2col dashboard-content-grid">
+      <div className="grid-2col dashboard-content-grid dashboard-primary-grid">
         {/* Left: 30-Day Lead & Intake Trajectory */}
-        <div className="crm-panel" style={{ marginBottom: 0 }}>
+        <div className="crm-panel dashboard-insight-panel dashboard-trajectory-panel">
           <div className="panel-header-bar">
-            <div>
-              <h3>30-Day Intake & Application Trajectory</h3>
-              <p>Daily volume of prospective inquiries, university applications, and class intakes</p>
+            <div className="dashboard-panel-heading">
+              <span className="dashboard-panel-icon orange" aria-hidden="true"><TrendingUp size={16} /></span>
+              <div>
+                <h3>30-Day Intake & Application Trajectory</h3>
+                <p>Daily volume of prospective inquiries, university applications, and class intakes</p>
+              </div>
             </div>
             <span className="panel-static-label">Asia/Kathmandu (UTC+05:45)</span>
           </div>
 
-          <div className="panel-body" style={{ height: "300px" }}>
+          <div className="panel-body dashboard-chart-body">
             {trendData.some(item => item.leads > 0 || item.applications > 0) ? <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -347,7 +350,7 @@ export function ManagementDashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                <XAxis dataKey="day" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                <XAxis dataKey="day" stroke="var(--text-muted)" fontSize={11} tickLine={false} minTickGap={20} />
                 <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} />
                 <Tooltip
                   contentStyle={{
@@ -367,11 +370,14 @@ export function ManagementDashboard() {
         </div>
 
         {/* Right: Today's Counselling Agenda */}
-        <div className="crm-panel" style={{ marginBottom: 0 }}>
+        <div className="crm-panel dashboard-insight-panel dashboard-appointments-panel">
           <div className="panel-header-bar">
-            <div>
-              <h3>Today's Counselling Appointments</h3>
-              <p>Scheduled consultations at the Bagbazar counselling desk</p>
+            <div className="dashboard-panel-heading">
+              <span className="dashboard-panel-icon blue" aria-hidden="true"><CalendarDays size={16} /></span>
+              <div>
+                <h3>Today's Counselling Appointments</h3>
+                <p>Scheduled consultations at the Bagbazar counselling desk</p>
+              </div>
             </div>
             <button
               type="button"
@@ -383,20 +389,11 @@ export function ManagementDashboard() {
             </button>
           </div>
 
-          <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div className="dashboard-appointments-list">
             {appointments.map(item => (
               <div
                 key={item.id}
-                style={{
-                  padding: "11px 14px",
-                  borderRadius: "var(--radius-sm)",
-                  background: "var(--bg-card-subtle)",
-                  border: "1px solid var(--border-subtle)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                }}
+                className="dashboard-appointment-item"
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <div
@@ -436,19 +433,22 @@ export function ManagementDashboard() {
       </div>
 
       {/* Bottom Grid: Market Distribution & Recent Activity Stream */}
-      <div className="grid-2col dashboard-content-grid">
+      <div className="grid-2col dashboard-content-grid dashboard-secondary-grid">
         {/* Left: Destination Market Distribution */}
-        <div className="crm-panel">
+        <div className="crm-panel dashboard-insight-panel dashboard-destinations-panel">
           <div className="panel-header-bar">
-            <div>
-              <h3>Destination Preference</h3>
-              <p>Top study abroad countries among active applicants</p>
+            <div className="dashboard-panel-heading">
+              <span className="dashboard-panel-icon purple" aria-hidden="true"><PlaneTakeoff size={16} /></span>
+              <div>
+                <h3>Destination Preference</h3>
+                <p>Top study abroad countries among active applicants</p>
+              </div>
             </div>
             <span className="panel-static-label">2026/27 intake</span>
           </div>
 
-          <div className="panel-body">
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div className="panel-body dashboard-destination-body">
+            <div className="dashboard-destination-list">
               {destinations.map(d => (
                 <div key={d.name} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
@@ -482,26 +482,23 @@ export function ManagementDashboard() {
         </div>
 
         {/* Right: Recent Operational Activity Stream */}
-        <div className="crm-panel">
+        <div className="crm-panel dashboard-insight-panel dashboard-activity-panel">
           <div className="panel-header-bar">
-            <div>
-              <h3>Live Operations Stream</h3>
-              <p>Auditable log of admissions, visa grants, and billing transactions</p>
+            <div className="dashboard-panel-heading">
+              <span className="dashboard-panel-icon green" aria-hidden="true"><Activity size={16} /></span>
+              <div>
+                <h3>Live Operations Stream</h3>
+                <p>Auditable log of admissions, visa grants, and billing transactions</p>
+              </div>
             </div>
             <span className="panel-static-label"><span className="live-indicator" aria-hidden="true" />Live feed</span>
           </div>
 
-          <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div className="dashboard-activity-list">
             {activities.map(act => (
               <div
                 key={act.id}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "12px",
-                  paddingBottom: "10px",
-                  borderBottom: "1px solid var(--border-subtle)",
-                }}
+                className="dashboard-activity-item"
               >
                 <div
                   style={{
