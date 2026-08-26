@@ -5,6 +5,8 @@ import fs from "fs";
 import path from "path";
 import nodemailer from "nodemailer";
 
+const enableLocalHttps = process.env.VITE_HTTPS !== "false";
+
 function crmSyncPlugin(): Plugin {
   const dataDir = path.resolve(process.cwd(), "data");
   const messagesFile = path.resolve(dataDir, "shared_messages.json");
@@ -759,7 +761,7 @@ function crmSyncPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), basicSsl(), crmSyncPlugin()],
+  plugins: [react(), ...(enableLocalHttps ? [basicSsl()] : []), crmSyncPlugin()],
   server: {
     host: "0.0.0.0",
     port: 5173,
