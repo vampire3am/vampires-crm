@@ -34,7 +34,7 @@
 
 .dashboard-page-header {
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   margin-bottom: 14px;
 }
 
@@ -47,7 +47,7 @@
 }
 
 .dashboard-page-header .page-header-actions {
-  margin-left: 8px;
+  margin-left: auto;
 }
 
 .dashboard-workspace :where(.btn-primary, .btn-secondary, .btn-ghost, .dashboard-shortcut),
@@ -56,8 +56,7 @@
 }
 
 .dashboard-attendance-card {
-  grid-template-columns: auto minmax(300px, 720px) auto;
-  justify-content: start;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
   margin-bottom: 14px;
   padding: 12px 14px;
@@ -65,6 +64,10 @@
   border-left: 3px solid var(--primary-navy-light);
   background: var(--bg-card);
   box-shadow: var(--shadow-xs);
+}
+
+.dashboard-attendance-actions {
+  justify-content: flex-end;
 }
 
 .dashboard-attendance-icon {
