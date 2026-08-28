@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [auth, login, routes, identityMigration, permissionMigration, staffMigration, staffFunction, staffService] = await Promise.all([
+const [auth, login, routes, identityMigration, permissionMigration, staffMigration, staffFunction, staffService, accessMigration, accessEditor] = await Promise.all([
   read("src/features/auth/AuthProvider.tsx"),
   read("src/pages/Login.tsx"),
   read("src/app/App.tsx"),
@@ -11,6 +11,8 @@ const [auth, login, routes, identityMigration, permissionMigration, staffMigrati
   read("supabase/migrations/202608210023_staff_provisioning.sql"),
   read("supabase/functions/invite-staff/index.ts"),
   read("src/services/staffAdminService.ts"),
+  read("supabase/migrations/202608280006_staff_access_control.sql"),
+  read("src/features/admin/StaffManagement.tsx"),
 ]);
 
 assert.doesNotMatch(auth, /VALID_PASSWORDS|aecs_staff_session|aecs_staff_profile/);
@@ -37,5 +39,12 @@ assert.match(staffFunction, /auth\.admin\.createUser/);
 assert.match(staffFunction, /auth\.admin\.updateUserById/);
 assert.match(staffFunction, /STAFF_PASSWORD_UPDATED/);
 assert.match(staffService, /functions\.invoke\("invite-staff"/);
+assert.match(accessMigration, /staff_permission_overrides/);
+assert.match(accessMigration, /sp\.access_mode='ROLE_PLUS'/);
+assert.match(accessMigration, /my_effective_permissions/);
+assert.match(staffFunction, /STAFF_ACCESS_UPDATED/);
+assert.match(accessEditor, /Exact custom access/);
+assert.match(accessEditor, /Role template \+ additions/);
+assert.match(auth, /hasPermission/);
 
 console.log("Phase 1 security contract: PASS");

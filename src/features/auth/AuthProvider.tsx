@@ -90,12 +90,16 @@ export interface StaffProfile {
   avatarBg?: string;
   desktop_modules?: Array<keyof RolePermissions> | null;
   assigned_responsibilities?: string;
+  access_mode?: "ROLE_PLUS" | "EXACT";
+  inactivity_minutes?: number;
 }
 
 interface AuthContextValue {
   session: Session | null;
   profile: StaffProfile | null;
   permissions: RolePermissions;
+  effectivePermissions: string[];
+  hasPermission: (permission: string) => boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -109,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<StaffProfile | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [effectivePermissions, setEffectivePermissions] = useState<string[]>([]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -123,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      if (!nextSession) setProfile(null);
+      if (!nextSession) { setProfile(null); setEffectivePermissions([]); }
       setLoading(Boolean(nextSession));
     });
 
@@ -150,8 +155,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           // Access customization was added after the core identity schema. Keep
           // sign-in compatible while that migration is being rolled out.
-          const { data: access } = await supabase.from("staff_profiles")
-            .select("desktop_modules,assigned_responsibilities").eq("id", session.user.id).maybeSingle();
+          const [{ data: access }, { data: effective }] = await Promise.all([
+            supabase.from("staff_profiles").select("desktop_modules,assigned_responsibilities,access_mode,inactivity_minutes").eq("id", session.user.id).maybeSingle(),
+            supabase.rpc("my_effective_permissions"),
+          ]);
+          setEffectivePermissions((effective ?? []).map((item: { permission_name: string }) => item.permission_name));
           setProfile({ ...data, ...(access ?? {}), avatarBg: data.avatar_bg ?? undefined } as StaffProfile);
         }
         setLoading(false);
@@ -159,6 +167,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => { mounted = false; };
   }, [session]);
+
+  useEffect(() => {
+    if (!profile || !session) return;
+    const timeout = Math.max(5, profile.inactivity_minutes ?? 30) * 60_000;
+    let timer = window.setTimeout(() => void supabase.auth.signOut(), timeout);
+    const reset = () => { window.clearTimeout(timer); timer = window.setTimeout(() => void supabase.auth.signOut(), timeout); };
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "scroll"];
+    events.forEach(event => window.addEventListener(event, reset, { passive: true }));
+    return () => { window.clearTimeout(timer); events.forEach(event => window.removeEventListener(event, reset)); };
+  }, [profile, session]);
 
   const rolePermissions = useMemo(
     () => profile
@@ -171,6 +189,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     profile,
     permissions: rolePermissions,
+    effectivePermissions,
+    hasPermission: (permission: string) => effectivePermissions.includes(permission),
     loading,
     signIn: async (email: string, password: string) => {
       if (!isSupabaseConfigured) {
@@ -188,6 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isSupabaseConfigured) await supabase.auth.signOut();
       setProfile(null);
       setSession(null);
+      setEffectivePermissions([]);
     },
     updateProfile: async updates => {
       if (!profile) throw new Error("No authenticated staff profile.");
@@ -200,7 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       setProfile(current => current ? { ...current, ...updates } : current);
     },
-  }), [session, profile, rolePermissions, loading]);
+  }), [session, profile, rolePermissions, effectivePermissions, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

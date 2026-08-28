@@ -19,6 +19,8 @@ export type StaffAdminRecord = {
   id: string; full_name: string; email: string; role: StaffRole; job_title: string;
   department: string; branch: string; phone: string | null; is_active: boolean;
   desktop_modules: string[] | null; assigned_responsibilities: string;
+  access_mode: "ROLE_PLUS" | "EXACT"; inactivity_minutes: number;
+  permission_overrides: string[];
 };
 
 export type StaffAdminInput = Omit<StaffAdminRecord, "id" | "is_active"> & {
@@ -42,10 +44,23 @@ async function invoke(body: Record<string, unknown>) {
 export const StaffAdminService = {
   async list(): Promise<StaffAdminRecord[]> {
     const { data, error } = await supabase.from("staff_profiles")
-      .select("id,full_name,email,role,job_title,department,branch,phone,is_active,desktop_modules,assigned_responsibilities")
+      .select("id,full_name,email,role,job_title,department,branch,phone,is_active,desktop_modules,assigned_responsibilities,access_mode,inactivity_minutes")
       .order("full_name");
     if (error) throw error;
-    return (data ?? []) as StaffAdminRecord[];
+    const ids = (data ?? []).map(member => member.id);
+    const { data: overrides, error: overrideError } = ids.length
+      ? await supabase.from("staff_permission_overrides").select("staff_id,permission_name,enabled").in("staff_id", ids)
+      : { data: [], error: null };
+    if (overrideError) throw overrideError;
+    return (data ?? []).map(member => ({
+      ...member,
+      permission_overrides: (overrides ?? []).filter(item => item.staff_id === member.id && item.enabled).map(item => item.permission_name),
+    })) as StaffAdminRecord[];
+  },
+  async rolePermissions(role: StaffRole): Promise<string[]> {
+    const { data, error } = await supabase.from("permissions").select("permission_name").eq("role", role).eq("enabled", true);
+    if (error) throw error;
+    return (data ?? []).map(item => item.permission_name);
   },
   create(input: StaffAdminInput) { return invoke({ action: "create", ...input }); },
   update(id: string, input: StaffAdminInput) { return invoke({ action: "update", user_id: id, ...input }); },

@@ -131,7 +131,7 @@ const INITIAL_LEAVES: LeaveRequest[] = [];
 const INITIAL_PAYROLL: PayrollRecord[] = [];
 
 export function HrmsWorkspace() {
-  const { profile } = useAuth();
+  const { profile, hasPermission } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab") as "staff" | "attendance" | "leaves" | "payroll" | "performance" | "documents" | null;
 
@@ -224,7 +224,8 @@ export function HrmsWorkspace() {
     reason: "",
   });
   const canRequestLeave = Boolean(profile && profile.role !== "ADMIN");
-  const canApproveLeave = profile?.role === "HR_ADMIN";
+  const canApproveLeave = hasPermission("hr.approve");
+  const canManagePayroll = hasPermission("payroll.manage");
 
   const openLeaveRequest = () => {
     if (!canRequestLeave) return;
@@ -798,7 +799,7 @@ export function HrmsWorkspace() {
             </div>
             <div className="panel-header-actions">
               <span className="status-pill">Fiscal Month: {formatBsMonth(payrollMonth)}</span>
-              {(["ADMIN","HR_ADMIN","DIRECTOR"] as string[]).includes(profile?.role??"")&&<button type="button" className="btn-primary" onClick={()=>setShowPayrollModal(true)}><Wallet size={15}/><span>Generate Payroll</span></button>}
+              {canManagePayroll&&<button type="button" className="btn-primary" onClick={()=>setShowPayrollModal(true)}><Wallet size={15}/><span>Generate Payroll</span></button>}
             </div>
           </div>
 
