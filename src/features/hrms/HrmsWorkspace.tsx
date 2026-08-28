@@ -10,9 +10,7 @@ import {
   FileText,
   Plus,
   Printer,
-  Receipt,
   Search,
-  TrendingUp,
   UserCheck,
   UserPlus,
   Users,
@@ -20,9 +18,11 @@ import {
   X,
 } from "lucide-react";
 import { PhoneInput } from "../../components/ui/PhoneInput";
+import { BsDateInput } from "../../components/ui/BsDateInput";
 import { HrmsService } from "../../services/hrmsService";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 import { useAuth } from "../auth/AuthProvider";
+import { formatBsDate, todayAd } from "../../lib/nepaliDate";
 
 interface StaffMember {
   id: string;
@@ -68,13 +68,36 @@ interface LeaveRequest {
   id: string;
   empCode: string;
   fullName: string;
-  leaveType: "Annual Leave" | "Casual Leave" | "Sick / Medical" | "Maternity / Paternity" | "Festival Leave";
+  leaveType: "Annual Leave" | "Casual Leave" | "Sick Leave" | "Unpaid Leave";
   fromDate: string;
   toDate: string;
   days: number;
   reason: string;
   status: "APPROVED" | "PENDING" | "REJECTED";
   approvedBy?: string;
+  approvedAt?: string;
+}
+
+interface LeavePolicy {
+  leaveType: LeaveRequest["leaveType"];
+  monthlyCredit: number;
+  isPaid: boolean;
+  allowHalfDay: boolean;
+  yearEndAction: "RESET" | "CARRY_FORWARD";
+  maxYearEndCarry: number | null;
+}
+
+interface LeaveBalance {
+  employeeId: string;
+  empCode: string;
+  fullName: string;
+  leaveType: LeaveRequest["leaveType"];
+  monthlyCredit: number;
+  opening: number;
+  credited: number;
+  adjusted: number;
+  used: number;
+  closing: number;
 }
 
 interface PayrollRecord {
@@ -128,6 +151,8 @@ export function HrmsWorkspace() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE);
   const [workBreaks, setWorkBreaks] = useState<WorkBreakRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>(INITIAL_LEAVES);
+  const [leavePolicies, setLeavePolicies] = useState<LeavePolicy[]>([]);
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [payroll, setPayroll] = useState<PayrollRecord[]>(INITIAL_PAYROLL);
   const [dataError, setDataError] = useState("");
   const [myAttendance, setMyAttendance] = useState<Awaited<ReturnType<typeof HrmsService.getMyTodayAttendance>>>(null);
@@ -135,8 +160,8 @@ export function HrmsWorkspace() {
   const loadHrmsData = async () => {
     try {
       setDataError("");
-      const [staff, attendanceRows, leaveRows, payrollRows, ownAttendance, breakRows] = await Promise.all([
-        HrmsService.getStaff(), HrmsService.getAttendance(), HrmsService.getLeaves(), HrmsService.getPayroll(), HrmsService.getMyTodayAttendance(), HrmsService.getWorkBreaks(),
+      const [staff, attendanceRows, leaveRows, payrollRows, ownAttendance, breakRows, policies, balances] = await Promise.all([
+        HrmsService.getStaff(), HrmsService.getAttendance(), HrmsService.getLeaves(), HrmsService.getPayroll(), HrmsService.getMyTodayAttendance(), HrmsService.getWorkBreaks(), HrmsService.getLeavePolicies(), HrmsService.getLeaveBalances(),
       ]);
       setStaffList(staff as StaffMember[]);
       setAttendance(attendanceRows as AttendanceRecord[]);
@@ -144,6 +169,8 @@ export function HrmsWorkspace() {
       setPayroll(payrollRows as PayrollRecord[]);
       setMyAttendance(ownAttendance);
       setWorkBreaks(breakRows as WorkBreakRecord[]);
+      setLeavePolicies(policies as LeavePolicy[]);
+      setLeaveBalances(balances as LeaveBalance[]);
     } catch (error) {
       setDataError(error instanceof Error ? error.message : "HRMS records could not be loaded");
     }
@@ -186,16 +213,17 @@ export function HrmsWorkspace() {
     fromDate: new Date().toISOString().slice(0, 10),
     toDate: new Date().toISOString().slice(0, 10),
     days: 1,
+    duration: "FULL_DAY" as "FULL_DAY" | "HALF_DAY",
     reason: "",
   });
   const canRequestLeave = Boolean(profile && profile.role !== "ADMIN");
-  const canApproveLeave = profile?.role === "ADMIN" || profile?.role === "DIRECTOR";
+  const canApproveLeave = profile?.role === "HR_ADMIN";
 
   const openLeaveRequest = () => {
     if (!canRequestLeave) return;
-    const today=new Date().toISOString().slice(0,10);
+    const today=todayAd();
     setDataError("");
-    setLeaveForm({empCode:myAttendance?.employeeCode??"",fullName:myAttendance?.fullName??profile?.full_name??"",leaveType:"Casual Leave",fromDate:today,toDate:today,days:1,reason:""});
+    setLeaveForm({empCode:myAttendance?.employeeCode??"",fullName:myAttendance?.fullName??profile?.full_name??"",leaveType:"Casual Leave",fromDate:today,toDate:today,days:1,duration:"FULL_DAY",reason:""});
     setShowLeaveModal(true);
   };
 
@@ -232,11 +260,11 @@ export function HrmsWorkspace() {
   };
 
   const handleApproveLeave = async (id: string) => {
-    try { await HrmsService.decideLeave(id,"APPROVED"); await loadHrmsData(); } catch(error){setDataError(error instanceof Error?error.message:"Leave approval failed");}
+    try { await HrmsService.decideLeave(id,"APPROVED"); await loadHrmsData(); notifySuccess("Leave approved","The balance, attendance record and HR audit trail were updated."); } catch(error){setDataError(error instanceof Error?error.message:"Leave approval failed");}
   };
 
   const handleRejectLeave = async (id: string) => {
-    try { await HrmsService.decideLeave(id,"REJECTED"); await loadHrmsData(); } catch(error){setDataError(error instanceof Error?error.message:"Leave rejection failed");}
+    try { await HrmsService.decideLeave(id,"REJECTED"); await loadHrmsData(); notifySuccess("Leave rejected","The HR decision was recorded without changing attendance or balances."); } catch(error){setDataError(error instanceof Error?error.message:"Leave rejection failed");}
   };
 
   const handleRequestLeave = async (e: React.FormEvent) => {
@@ -245,11 +273,11 @@ export function HrmsWorkspace() {
     if(!leaveForm.empCode){notifyError("Employee profile unavailable","Ask an administrator to link your login to an active HR employee record.");return}
     if(!leaveForm.fromDate||!leaveForm.toDate||new Date(leaveForm.toDate)<new Date(leaveForm.fromDate)){notifyError("Invalid leave dates","The end date must be the same as or later than the start date.");return}
     if(!leaveForm.reason.trim()){notifyError("Reason required","Add a short reason or handover note before submitting.");return}
-    try { await HrmsService.requestLeave({employee_code:leaveForm.empCode,leave_type:leaveForm.leaveType,from_date:leaveForm.fromDate,to_date:leaveForm.toDate,days:Number(leaveForm.days),reason:leaveForm.reason.trim()}); await loadHrmsData(); setShowLeaveModal(false);notifySuccess("Leave request submitted","Management can now review the request in the HRMS approval queue."); }
+    try { await HrmsService.requestLeave({employee_code:leaveForm.empCode,leave_type:leaveForm.leaveType,from_date:leaveForm.fromDate,to_date:leaveForm.toDate,duration:leaveForm.duration,reason:leaveForm.reason.trim()}); await loadHrmsData(); setShowLeaveModal(false);notifySuccess("Leave request submitted","The request is now waiting for HR approval."); }
     catch(error){const message=error instanceof Error?error.message:"Leave request failed";setDataError(message);notifyError("Leave request failed",message);}
   };
 
-  const updateLeaveDates=(field:"fromDate"|"toDate",value:string)=>setLeaveForm(current=>{const next={...current,[field]:value};const from=new Date(`${next.fromDate}T00:00:00`);const to=new Date(`${next.toDate}T00:00:00`);const days=!Number.isNaN(from.getTime())&&!Number.isNaN(to.getTime())&&to>=from?Math.floor((to.getTime()-from.getTime())/86400000)+1:0;return{...next,days}});
+  const updateLeaveDates=(field:"fromDate"|"toDate",value:string)=>setLeaveForm(current=>{const next={...current,[field]:value};const from=new Date(`${next.fromDate}T00:00:00`);const to=new Date(`${next.toDate}T00:00:00`);const fullDays=!Number.isNaN(from.getTime())&&!Number.isNaN(to.getTime())&&to>=from?Math.floor((to.getTime()-from.getTime())/86400000)+1:0;return{...next,days:next.duration==="HALF_DAY"?0.5:fullDays}});
 
   const filteredStaff = staffList.filter(s => {
     const matchesDept = deptFilter === "ALL" || s.department === deptFilter;
@@ -262,8 +290,10 @@ export function HrmsWorkspace() {
   });
 
   const totalMonthlyPayroll = payroll.reduce((sum, p) => sum + p.netSalary, 0);
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = todayAd();
   const todayAttendance = attendance.filter(record => record.attendanceDate === todayIso);
+  const presentToday = todayAttendance.filter(a => a.status === "PRESENT" || a.status === "LATE").length;
+  const attendanceRate = staffList.length ? Math.round((presentToday / staffList.length) * 100) : 0;
 
   return (
     <div className="page-container">
@@ -327,7 +357,7 @@ export function HrmsWorkspace() {
           <div className="metric-value">
             {todayAttendance.filter(a => a.status === "PRESENT" || a.status === "LATE").length} Present
           </div>
-          <span className="metric-sub">91.6% punctuality clearance</span>
+          <span className="metric-sub">{attendanceRate}% of active employee records</span>
         </div>
 
         <div className="metric-box">
@@ -340,7 +370,7 @@ export function HrmsWorkspace() {
           <div className="metric-value">
             {leaves.filter(l => l.status === "PENDING").length} Requests
           </div>
-          <span className="metric-sub">Awaiting management approval</span>
+          <span className="metric-sub">Awaiting HR decision</span>
         </div>
 
         <div className="metric-box">
@@ -351,54 +381,8 @@ export function HrmsWorkspace() {
             </div>
           </div>
           <div className="metric-value">₨ {totalMonthlyPayroll.toLocaleString()}</div>
-          <span className="metric-sub">SSF, CIT & 1% TDS Compliant</span>
+          <span className="metric-sub">Calculated from configurable company rules</span>
         </div>
-      </div>
-
-      {/* View Switcher Tabs */}
-      <div className="document-tabs">
-        <button
-          className={activeTab === "staff" ? "active" : ""}
-          onClick={() => handleTabChange("staff")}
-        >
-          <Users size={16} />
-          <span>Employees ({staffList.length})</span>
-        </button>
-        <button
-          className={activeTab === "attendance" ? "active" : ""}
-          onClick={() => handleTabChange("attendance")}
-        >
-          <Clock size={16} />
-          <span>Attendance</span>
-        </button>
-        <button
-          className={activeTab === "leaves" ? "active" : ""}
-          onClick={() => handleTabChange("leaves")}
-        >
-          <Calendar size={16} />
-          <span>Leave Requests ({leaves.filter(l => l.status === "PENDING").length})</span>
-        </button>
-        <button
-          className={activeTab === "payroll" ? "active" : ""}
-          onClick={() => handleTabChange("payroll")}
-        >
-          <Receipt size={16} />
-          <span>Payroll</span>
-        </button>
-        <button
-          className={activeTab === "performance" ? "active" : ""}
-          onClick={() => handleTabChange("performance")}
-        >
-          <TrendingUp size={16} />
-          <span>Performance</span>
-        </button>
-        <button
-          className={activeTab === "documents" ? "active" : ""}
-          onClick={() => handleTabChange("documents")}
-        >
-          <FileText size={16} />
-          <span>HR Documents</span>
-        </button>
       </div>
 
       {/* TAB 1: EMPLOYEES DIRECTORY */}
@@ -621,7 +605,7 @@ export function HrmsWorkspace() {
           <div className="panel-header-bar">
             <div>
               <h3>Staff Leave Management & Approval Queue</h3>
-              <p>Formal requests for annual, sick, casual, and festival leaves in Nepal</p>
+              <p>Monthly company entitlement, employee requests and HR-only decisions</p>
             </div>
             {canRequestLeave && <button
               type="button"
@@ -631,6 +615,18 @@ export function HrmsWorkspace() {
               <Plus size={15} />
               <span>Apply for Leave</span>
             </button>}
+          </div>
+
+          <div className="hrms-leave-policy-grid">
+            {leavePolicies.map(policy => {
+              const policyBalances=leaveBalances.filter(item=>item.leaveType===policy.leaveType);
+              const available=policyBalances.reduce((sum,item)=>sum+item.closing,0);
+              return <article key={policy.leaveType} className="hrms-leave-policy-card">
+                <div><span>{policy.leaveType}</span><strong>{policy.isPaid?available.toFixed(1):"Approval"}</strong></div>
+                <small>{policy.isPaid?`${policy.monthlyCredit} day credited monthly · ${policyBalances.length} staff balance${policyBalances.length===1?"":"s"}`:"No entitlement balance · payroll deduction applies"}</small>
+                <em>{policy.yearEndAction==="CARRY_FORWARD"?`Year-end carry up to ${policy.maxYearEndCarry??"company limit"} days`:"Resets at the configured leave-year end"}</em>
+              </article>;
+            })}
           </div>
 
           <div className="table-wrapper">
@@ -660,7 +656,7 @@ export function HrmsWorkspace() {
                       <span className="badge-status application">{lv.leaveType}</span>
                     </td>
                     <td>
-                      <span style={{ fontSize: "12px" }}>{lv.fromDate} to {lv.toDate}</span>
+                      <span style={{ fontSize: "12px" }}>{formatBsDate(lv.fromDate)} to {formatBsDate(lv.toDate)}</span>
                     </td>
                     <td>
                       <strong>{lv.days} {lv.days === 1 ? "Day" : "Days"}</strong>
@@ -697,7 +693,7 @@ export function HrmsWorkspace() {
                         </div>
                       ) : (
                         <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                          {lv.approvedBy ? `Approved by ${lv.approvedBy}` : "Completed"}
+                          {lv.approvedBy ? `HR: ${lv.approvedBy}${lv.approvedAt?` · ${formatBsDate(lv.approvedAt)}`:""}` : "Awaiting HR"}
                         </span>
                       )}
                     </td>
@@ -1014,7 +1010,7 @@ export function HrmsWorkspace() {
               <div>
                 <h3>Apply for Leave</h3>
                 <p style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
-                  Submit request to Management for Maker-Checker approval
+                  BS-dated request sent directly to HR for approval or rejection
                 </p>
               </div>
               <button
@@ -1039,33 +1035,26 @@ export function HrmsWorkspace() {
                     <select
                       value={leaveForm.leaveType}
                       onChange={e => setLeaveForm({ ...leaveForm, leaveType: e.target.value as LeaveRequest["leaveType"] })}
-                    >
-                      <option value="Annual Leave">Annual Leave</option>
-                      <option value="Casual Leave">Casual Leave</option>
-                      <option value="Sick / Medical">Sick / Medical</option>
-                      <option value="Festival Leave">Festival Leave</option>
-                    </select>
+                    >{leavePolicies.map(policy=><option value={policy.leaveType} key={policy.leaveType}>{policy.leaveType}{policy.isPaid?` · ${policy.monthlyCredit}/month`:""}</option>)}</select>
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Duration *</label>
+                  <select value={leaveForm.duration} onChange={e=>setLeaveForm(current=>{const duration=e.target.value as "FULL_DAY"|"HALF_DAY";return{...current,duration,toDate:duration==="HALF_DAY"?current.fromDate:current.toDate,days:duration==="HALF_DAY"?0.5:Math.max(1,current.days)}})}>
+                    <option value="FULL_DAY">Full day</option>
+                    <option value="HALF_DAY">Half day (0.5)</option>
+                  </select>
                 </div>
 
                 <div className="form-row-2">
                   <div className="form-group">
-                    <label>From Date *</label>
-                    <input
-                      type="date"
-                      required
-                      value={leaveForm.fromDate}
-                      onChange={e => updateLeaveDates("fromDate",e.target.value)}
-                    />
+                    <label>From Date (BS) *</label>
+                    <BsDateInput required value={leaveForm.fromDate} onChange={value => updateLeaveDates("fromDate",value)} ariaLabel="Leave start date in BS" />
                   </div>
                   <div className="form-group">
-                    <label>To Date *</label>
-                    <input
-                      type="date"
-                      required
-                      value={leaveForm.toDate}
-                      onChange={e => updateLeaveDates("toDate",e.target.value)}
-                    />
+                    <label>To Date (BS) *</label>
+                    <BsDateInput required disabled={leaveForm.duration==="HALF_DAY"} value={leaveForm.toDate} onChange={value => updateLeaveDates("toDate",value)} ariaLabel="Leave end date in BS" />
                   </div>
                 </div>
 

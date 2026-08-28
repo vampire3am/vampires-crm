@@ -9,20 +9,35 @@ import {
   Save,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   UserPlus,
 } from "lucide-react";
 import { BLUEPRINT_ROLES, MAKER_CHECKER_RULES, SENSITIVE_PERMISSIONS } from "../../lib/blueprintRolesData";
 import { AdminService, type OrganizationForm } from "../../services/adminService";
 import { StaffManagement } from "./StaffManagement";
 import { AECS_ORGANIZATION } from "../../config/organization";
+import { HrmsService } from "../../services/hrmsService";
+import { notifySuccess } from "../../components/common/CrmNotifications";
+
+interface LeavePolicyForm {
+  leaveType: string;
+  monthlyCredit: number;
+  isPaid: boolean;
+  allowHalfDay: boolean;
+  monthlyCarryForward: boolean;
+  yearEndAction: "RESET" | "CARRY_FORWARD";
+  maxYearEndCarry: number | null;
+  medicalDocumentAfterDays: number | null;
+}
 
 export function AdminDashboard() {
   const initialTab = new URLSearchParams(location.search).get("tab");
-  const [activeTab, setActiveTab] = useState<"org" | "branches" | "staff" | "roles" | "security">(initialTab === "roles" ? "roles" : initialTab === "staff" ? "staff" : "org");
+  const [activeTab, setActiveTab] = useState<"org" | "branches" | "staff" | "roles" | "hrms" | "security">(initialTab === "roles" ? "roles" : initialTab === "staff" ? "staff" : initialTab === "hrms" ? "hrms" : "org");
   const [roleSearch, setRoleSearch] = useState<string>("");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [liveCounts, setLiveCounts] = useState({branches:0,roles:0,audits:0});
+  const [leavePolicies, setLeavePolicies] = useState<LeavePolicyForm[]>([]);
 
   // Form State
   const [orgForm, setOrgForm] = useState<OrganizationForm>({
@@ -38,10 +53,17 @@ export function AdminDashboard() {
     email: "",
   });
 
-  useEffect(()=>{Promise.all([AdminService.getOrganization(),AdminService.getCounts()]).then(([organization,counts])=>{if(organization)setOrgForm(organization);setLiveCounts(counts)}).catch(error=>setSaveError(error instanceof Error?error.message:"Administration data could not be loaded"))},[]);
+  useEffect(()=>{Promise.all([AdminService.getOrganization(),AdminService.getCounts(),HrmsService.getLeavePolicies()]).then(([organization,counts,policies])=>{if(organization)setOrgForm(organization);setLiveCounts(counts);setLeavePolicies(policies as LeavePolicyForm[])}).catch(error=>setSaveError(error instanceof Error?error.message:"Administration data could not be loaded"))},[]);
 
   const handleSaveSettings = async () => {
-    try{setSaveError("");await AdminService.saveOrganization(orgForm);setSavedSuccess(true);setTimeout(() => setSavedSuccess(false), 3000)}catch(error){setSaveError(error instanceof Error?error.message:"Settings could not be saved")}
+    try{
+      setSaveError("");
+      if(activeTab==="hrms"){
+        await Promise.all(leavePolicies.map(policy=>HrmsService.saveLeavePolicy({leave_type:policy.leaveType,monthly_credit:policy.monthlyCredit,allow_half_day:policy.allowHalfDay,monthly_carry_forward:policy.monthlyCarryForward,year_end_action:policy.yearEndAction,max_year_end_carry:policy.maxYearEndCarry,medical_document_after_days:policy.medicalDocumentAfterDays})));
+        notifySuccess("HRMS company rules saved","Monthly accrual, half-day and year-end carry-forward controls are now active.");
+      }else await AdminService.saveOrganization(orgForm);
+      setSavedSuccess(true);setTimeout(() => setSavedSuccess(false), 3000)
+    }catch(error){setSaveError(error instanceof Error?error.message:"Settings could not be saved")}
   };
 
   const filteredRoles = BLUEPRINT_ROLES.filter(
@@ -152,6 +174,13 @@ export function AdminDashboard() {
           <span>18 CRM Roles & Permissions Matrix</span>
         </button>
         <button
+          className={activeTab === "hrms" ? "active" : ""}
+          onClick={() => setActiveTab("hrms")}
+        >
+          <SlidersHorizontal size={16} />
+          <span>HRMS Company Rules</span>
+        </button>
+        <button
           className={activeTab === "security" ? "active" : ""}
           onClick={() => setActiveTab("security")}
         >
@@ -161,6 +190,29 @@ export function AdminDashboard() {
       </div>
 
       {activeTab === "staff" && <StaffManagement />}
+
+      {activeTab === "hrms" && (
+        <div className="crm-panel hrms-settings-panel">
+          <div className="panel-header-bar">
+            <div><h3>Leave Accrual & Carry-Forward Rules</h3><p>AECS company policy · BS-first dates · Employee → HR decision</p></div>
+            <span className="status-pill">HR approval only</span>
+          </div>
+          <div className="hrms-policy-settings-grid">
+            {leavePolicies.map((policy,index)=><article className="hrms-policy-editor" key={policy.leaveType}>
+              <header><div><strong>{policy.leaveType}</strong><span>{policy.isPaid?"Paid monthly entitlement":"No entitlement balance"}</span></div><span className={`badge-status ${policy.isPaid?"enrolled":"application"}`}>{policy.isPaid?`${policy.monthlyCredit}/month`:"Approval based"}</span></header>
+              <div className="form-row-2">
+                <div className="form-group"><label>Monthly credit (days)</label><input type="number" min="0" step="0.5" disabled={!policy.isPaid} value={policy.monthlyCredit} onChange={event=>setLeavePolicies(current=>current.map((item,itemIndex)=>itemIndex===index?{...item,monthlyCredit:Number(event.target.value)}:item))}/></div>
+                <div className="form-group"><label>Year-end action</label><select disabled={!policy.isPaid} value={policy.yearEndAction} onChange={event=>setLeavePolicies(current=>current.map((item,itemIndex)=>itemIndex===index?{...item,yearEndAction:event.target.value as LeavePolicyForm["yearEndAction"]}:item))}><option value="RESET">Reset</option><option value="CARRY_FORWARD">Carry forward</option></select></div>
+              </div>
+              <div className="form-row-2">
+                <div className="form-group"><label>Maximum year-end carry</label><input type="number" min="0" step="0.5" disabled={!policy.isPaid||policy.yearEndAction!=="CARRY_FORWARD"} value={policy.maxYearEndCarry??0} onChange={event=>setLeavePolicies(current=>current.map((item,itemIndex)=>itemIndex===index?{...item,maxYearEndCarry:Number(event.target.value)}:item))}/></div>
+                <label className="hrms-policy-check"><input type="checkbox" checked={policy.allowHalfDay} onChange={event=>setLeavePolicies(current=>current.map((item,itemIndex)=>itemIndex===index?{...item,allowHalfDay:event.target.checked}:item))}/><span>Allow half-day requests</span></label>
+              </div>
+              <footer>{policy.isPaid?"Closing balance automatically becomes next month’s opening balance.":"Approved unpaid leave updates attendance and becomes a payroll deduction input."}</footer>
+            </article>)}
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: ORGANIZATION & BRANDING */}
       {activeTab === "org" && (

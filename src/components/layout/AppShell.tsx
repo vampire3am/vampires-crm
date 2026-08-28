@@ -358,18 +358,10 @@ export function AppShell() {
                   <div className="sidebar-submenu">
                     <NavLink
                       to="/hrms?tab=staff"
-                      className={({ isActive }) => (isActive && location.search.includes("tab=staff") ? "sidebar-sublink active" : "sidebar-sublink")}
-                    >
-                      <LayoutDashboard size={14} />
-                      <span>HR Dashboard</span>
-                    </NavLink>
-
-                    <NavLink
-                      to="/hrms?tab=staff"
                       className={({ isActive }) => (isActive && (location.search.includes("tab=staff") || !location.search) ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
                       <Users size={14} />
-                      <span>Employees</span>
+                      <span>Employees & Overview</span>
                     </NavLink>
 
                     <NavLink

@@ -41,6 +41,8 @@ import {
 } from "../../services/dashboardService";
 import { useAuth } from "../auth/AuthProvider";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
+import { BsDateInput } from "../../components/ui/BsDateInput";
+import { todayAd } from "../../lib/nepaliDate";
 
 interface DashboardLeave {
   id: string;
@@ -67,7 +69,7 @@ export function ManagementDashboard() {
   const [myLeaves, setMyLeaves] = useState<DashboardLeave[]>([]);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
-  const [leaveForm, setLeaveForm] = useState({ leaveType: "Casual Leave", fromDate: "", toDate: "", days: 0, reason: "" });
+  const [leaveForm, setLeaveForm] = useState({ leaveType: "Casual Leave", fromDate: "", toDate: "", days: 0, duration:"FULL_DAY" as "FULL_DAY"|"HALF_DAY", reason: "" });
   const canRequestLeave = Boolean(profile && profile.role !== "ADMIN");
 
   const loadMyLeaves = async () => {
@@ -76,8 +78,8 @@ export function ManagementDashboard() {
   };
 
   const openLeaveModal = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    setLeaveForm({ leaveType: "Casual Leave", fromDate: today, toDate: today, days: 1, reason: "" });
+    const today = todayAd();
+    setLeaveForm({ leaveType: "Casual Leave", fromDate: today, toDate: today, days: 1, duration:"FULL_DAY", reason: "" });
     setShowLeaveModal(true);
   };
 
@@ -86,7 +88,7 @@ export function ManagementDashboard() {
     const from = new Date(`${next.fromDate}T00:00:00`);
     const to = new Date(`${next.toDate}T00:00:00`);
     const days = !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && to >= from ? Math.floor((to.getTime() - from.getTime()) / 86400000) + 1 : 0;
-    return { ...next, days };
+    return { ...next, days:next.duration==="HALF_DAY"?0.5:days };
   });
 
   const submitLeaveRequest = async (event: React.FormEvent) => {
@@ -95,10 +97,10 @@ export function ManagementDashboard() {
     if (!leaveForm.reason.trim()) return notifyError("Reason required", "Add a short reason or handover note before submitting.");
     setLeaveSubmitting(true);
     try {
-      await HrmsService.requestLeave({ leave_type: leaveForm.leaveType, from_date: leaveForm.fromDate, to_date: leaveForm.toDate, reason: leaveForm.reason.trim() });
+      await HrmsService.requestLeave({ leave_type: leaveForm.leaveType, from_date: leaveForm.fromDate, to_date: leaveForm.toDate, duration:leaveForm.duration, reason: leaveForm.reason.trim() });
       await loadMyLeaves();
       setShowLeaveModal(false);
-      notifySuccess("Leave request submitted", "Your request is now in the HRMS approval queue for HR or management.");
+      notifySuccess("Leave request submitted", "Your request is now waiting for HR approval.");
     } catch (error) { notifyError("Leave request failed", error instanceof Error ? error.message : "The request could not be submitted."); }
     finally { setLeaveSubmitting(false); }
   };
@@ -249,12 +251,13 @@ export function ManagementDashboard() {
 
       {showLeaveModal && canRequestLeave && <div className="modal-backdrop-clean" onClick={()=>setShowLeaveModal(false)}>
         <div className="modal-dialog-clean dashboard-leave-modal" onClick={event=>event.stopPropagation()}>
-          <div className="modal-header-clean"><div><span className="page-category-eyebrow">Staff self-service</span><h3>Request leave</h3><p>Your application goes directly to the HRMS approval queue.</p></div><button type="button" className="drawer-close-btn" onClick={()=>setShowLeaveModal(false)} aria-label="Close leave request"><X size={18}/></button></div>
+          <div className="modal-header-clean"><div><span className="page-category-eyebrow">Staff self-service</span><h3>Request leave</h3><p>Your BS-dated application goes directly to HR.</p></div><button type="button" className="drawer-close-btn" onClick={()=>setShowLeaveModal(false)} aria-label="Close leave request"><X size={18}/></button></div>
           <form onSubmit={submitLeaveRequest}>
             <div className="modal-body-clean">
               <div className="hrms-self-applicant"><CalendarDays size={17}/><div><strong>{myAttendance?.fullName || profile?.full_name || "Staff member"}</strong><span>{myAttendance?.employeeCode || "Linked employee profile"}</span></div></div>
-              <div className="form-group"><label>Leave category *</label><select required value={leaveForm.leaveType} onChange={event=>setLeaveForm({...leaveForm,leaveType:event.target.value})}><option>Annual Leave</option><option>Casual Leave</option><option>Sick / Medical</option><option>Maternity / Paternity</option><option>Festival Leave</option></select></div>
-              <div className="form-row-2"><div className="form-group"><label>From date *</label><input type="date" required value={leaveForm.fromDate} onChange={event=>updateLeaveDate("fromDate",event.target.value)}/></div><div className="form-group"><label>To date *</label><input type="date" required min={leaveForm.fromDate} value={leaveForm.toDate} onChange={event=>updateLeaveDate("toDate",event.target.value)}/></div></div>
+              <div className="form-group"><label>Leave category *</label><select required value={leaveForm.leaveType} onChange={event=>setLeaveForm({...leaveForm,leaveType:event.target.value})}><option>Annual Leave</option><option>Casual Leave</option><option>Sick Leave</option><option>Unpaid Leave</option></select></div>
+              <div className="form-group"><label>Duration *</label><select value={leaveForm.duration} onChange={event=>setLeaveForm(current=>{const duration=event.target.value as "FULL_DAY"|"HALF_DAY";return{...current,duration,toDate:duration==="HALF_DAY"?current.fromDate:current.toDate,days:duration==="HALF_DAY"?0.5:Math.max(1,current.days)}})}><option value="FULL_DAY">Full day</option><option value="HALF_DAY">Half day (0.5)</option></select></div>
+              <div className="form-row-2"><div className="form-group"><label>From date (BS) *</label><BsDateInput required value={leaveForm.fromDate} onChange={value=>updateLeaveDate("fromDate",value)}/></div><div className="form-group"><label>To date (BS) *</label><BsDateInput required disabled={leaveForm.duration==="HALF_DAY"} value={leaveForm.toDate} onChange={value=>updateLeaveDate("toDate",value)}/></div></div>
               <div className="hrms-leave-duration"><CalendarDays size={16}/><span>Requested duration</span><strong>{leaveForm.days} {leaveForm.days===1?"day":"days"}</strong></div>
               <div className="form-group"><label>Reason / handover notes *</label><textarea required rows={4} value={leaveForm.reason} onChange={event=>setLeaveForm({...leaveForm,reason:event.target.value})} placeholder="Explain the reason and any work that needs handing over…"/></div>
             </div>

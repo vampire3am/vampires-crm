@@ -4,6 +4,7 @@ import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 
 export type StaffRole =
   | "ADMIN"
+  | "HR_ADMIN"
   | "DIRECTOR"
   | "SENIOR_COUNSELLOR"
   | "COUNSELLOR"
@@ -61,6 +62,7 @@ const ALL_PERMISSIONS = Object.keys(ROLE_PERMISSION_KEYS) as Array<keyof RolePer
 
 export const ROLE_PERMISSIONS: Record<StaffRole, RolePermissions> = {
   ADMIN: permissions(ALL_PERMISSIONS),
+  HR_ADMIN: permissions(["dashboard", "hrms", "reports", "settings", "documents", "messages"]),
   DIRECTOR: permissions(ALL_PERMISSIONS.filter(permission => permission !== "settings")),
   SENIOR_COUNSELLOR: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "documents", "messages"]),
   COUNSELLOR: permissions(["dashboard", "leads", "students", "counselling", "applications", "documents", "messages"]),
