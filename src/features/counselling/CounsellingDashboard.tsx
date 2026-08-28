@@ -60,6 +60,7 @@ import { COUNTRY_METADATA } from "../../lib/countryMetadata.generated";
 import { MultiIntakePicker } from "../../components/ui/MultiIntakePicker";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 import { validateDocumentFiles } from "../../lib/documentUploadPolicy";
+import { generateUuid } from "../../lib/generateUuid";
 import { CounsellingService, type CounsellingRecord } from "../../services/counsellingService";
 import { DestinationCatalogService } from "../../services/destinationCatalogService";
 import { StudentService, type StudentDirectoryRecord } from "../../services/studentService";
@@ -453,7 +454,7 @@ export function CounsellingDashboard() {
     if (!validateDocumentFiles(allowed)) return;
     const additions = await Promise.all(allowed.map(file => new Promise<DestinationDocument>((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({ id: crypto.randomUUID(), name: file.name, size: file.size, type: file.type, dataUrl: String(reader.result), uploadedAt: new Date().toISOString() });
+      reader.onload = () => resolve({ id: generateUuid(), name: file.name, size: file.size, type: file.type, dataUrl: String(reader.result), uploadedAt: new Date().toISOString() });
       reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(file);
     })));

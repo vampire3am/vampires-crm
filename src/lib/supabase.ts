@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { generateUuid } from "./generateUuid";
 
 // The publishable key is intentionally safe for browser use. Keeping the AECS
 // project as the production fallback prevents a Vercel build from silently
@@ -45,7 +46,7 @@ const crmFetch: typeof fetch = async (input, init) => {
     const state = window as Window & { __aecsLastSuccessAt?: number };
     if ((state.__aecsLastSuccessAt ?? 0) > completedAt) return;
     state.__aecsLastSuccessAt = Date.now();
-    window.dispatchEvent(new CustomEvent("aecs:notice", { detail: { id: crypto.randomUUID(), tone: "success", title: `${action} successfully` } }));
+    window.dispatchEvent(new CustomEvent("aecs:notice", { detail: { id: generateUuid(), tone: "success", title: `${action} successfully` } }));
   }, 900);
   return response;
 };

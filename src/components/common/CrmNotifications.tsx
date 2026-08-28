@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Info, X } from "lucide-react";
+import { generateUuid } from "../../lib/generateUuid";
 
 export type CrmNoticeTone = "success" | "error" | "info";
 type CrmNotice = { id: string; tone: CrmNoticeTone; title: string; message?: string };
@@ -7,7 +8,7 @@ const EVENT = "aecs:notice";
 
 export const notify = (tone: CrmNoticeTone, title: string, message?: string) => {
   if (tone === "success") (window as Window & { __aecsLastSuccessAt?: number }).__aecsLastSuccessAt = Date.now();
-  return window.dispatchEvent(new CustomEvent(EVENT, { detail: { id: crypto.randomUUID(), tone, title, message } }));
+  return window.dispatchEvent(new CustomEvent(EVENT, { detail: { id: generateUuid(), tone, title, message } }));
 };
 export const notifySuccess = (title: string, message?: string) => notify("success", title, message);
 export const notifyError = (title: string, message?: string) => notify("error", title, message);
@@ -45,11 +46,11 @@ export function CrmNotificationCenter() {
         element.dataset.crmRelayed = "true";
         if (element.matches(successSelector)) {
           (window as Window & { __aecsLastSuccessAt?: number }).__aecsLastSuccessAt = Date.now();
-          const notice = { id: crypto.randomUUID(), tone: "success" as const, title: message };
+          const notice = { id: generateUuid(), tone: "success" as const, title: message };
           setNotices(current => [...current.slice(-3), notice]);
           window.setTimeout(() => setNotices(current => current.filter(item => item.id !== notice.id)), 4200);
         } else {
-          setErrorNotice({ id: crypto.randomUUID(), tone: "error", title: "Unable to complete action", message });
+          setErrorNotice({ id: generateUuid(), tone: "error", title: "Unable to complete action", message });
         }
       }
     };

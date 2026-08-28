@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { generateUuid } from "../lib/generateUuid";
 
 export interface B2BPartner {
   id: string; code: string; name: string;
@@ -62,7 +63,7 @@ export const B2BService = {
     return (data || []).map(fromRow);
   },
   async createPartner(partner: Omit<B2BPartner, "id" | "code" | "createdAt">): Promise<B2BPartner> {
-    const record = { ...partner, id: crypto.randomUUID(), code: `B2B-${Date.now().toString().slice(-7)}`, createdAt: new Date().toISOString().slice(0, 10) };
+    const record = { ...partner, id: generateUuid(), code: `B2B-${Date.now().toString().slice(-7)}`, createdAt: new Date().toISOString().slice(0, 10) };
     const { data, error } = await supabase.from("b2b_partners").insert(cleanRow(toRow(record))).select("*").single();
     if (error) throw error;
     return fromRow(data);

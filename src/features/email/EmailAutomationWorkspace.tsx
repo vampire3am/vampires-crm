@@ -52,6 +52,7 @@ import {
   EmailAutomationService,
   type SmtpSettings,
 } from "../../services/emailAutomationService";
+import { generateUuid } from "../../lib/generateUuid";
 
 export function EmailAutomationWorkspace() {
   const [activeTab, setActiveTab] = useState<
@@ -225,7 +226,7 @@ export function EmailAutomationWorkspace() {
 
   const openTemplateEditor = (template?: EmailTemplate) => {
     setEditingTemplate(template ? { ...template } : {
-      id: crypto.randomUUID(),
+      id: generateUuid(),
       name: "",
       category: "ONBOARDING",
       subject: "",

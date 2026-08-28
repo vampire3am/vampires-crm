@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { generateUuid } from "../lib/generateUuid";
 
 export interface StaffUser {
   id: string;
@@ -150,7 +151,7 @@ export const MessagingService = {
     // React StrictMode mounts effects twice in development. A unique topic prevents
     // Supabase from returning a channel that has already reached `subscribe()` while
     // the first effect's asynchronous cleanup is still removing it.
-    const channelName = `crm-communications-${crypto.randomUUID()}`;
+    const channelName = `crm-communications-${generateUuid()}`;
     const channel=supabase.channel(channelName).on("postgres_changes",{event:"*",schema:"public",table:"communication_messages"},onUpdate).on("postgres_changes",{event:"*",schema:"public",table:"communication_reactions"},onUpdate).subscribe();return()=>{void supabase.removeChannel(channel)};
   },
 };
