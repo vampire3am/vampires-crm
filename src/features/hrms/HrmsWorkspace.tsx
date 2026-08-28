@@ -23,7 +23,7 @@ import { LeaveAllocationPicker, type LeaveAllocation } from "../../components/ui
 import { HrmsService } from "../../services/hrmsService";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 import { useAuth } from "../auth/AuthProvider";
-import { formatBsDate, todayAd } from "../../lib/nepaliDate";
+import { bsMonthToAdRange, formatBsDate, formatBsMonth, todayAd, todayBs } from "../../lib/nepaliDate";
 
 interface StaffMember {
   id: string;
@@ -118,7 +118,7 @@ interface PayrollRecord {
   citDeduction: number;
   tdsTax: number; // 1%
   netSalary: number;
-  status: "PAID" | "PROCESSING";
+  status: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "PAID" | "CANCELLED";
   paymentDate: string;
 }
 
@@ -192,6 +192,9 @@ export function HrmsWorkspace() {
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [activePayslip, setActivePayslip] = useState<PayrollRecord | null>(null);
+  const [showPayrollModal, setShowPayrollModal] = useState(false);
+  const [payrollMonth, setPayrollMonth] = useState(todayBs().slice(0,7));
+  const [payrollGenerating, setPayrollGenerating] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [clockInSuccess, setClockInSuccess] = useState(false);
   const [clockOutSuccess, setClockOutSuccess] = useState(false);
@@ -282,6 +285,19 @@ export function HrmsWorkspace() {
     if(leaveForm.allocations.length>1&&(leaveForm.days!==1||leaveForm.fromDate!==leaveForm.toDate)){notifyError("Combined balance is for one full day","Choose one date and Full day to combine two 0.5-day balances.");return}
     try { await HrmsService.requestLeave({employee_code:leaveForm.empCode,leave_type:leaveForm.allocations[0].leaveType,allocations:leaveForm.allocations.map(item=>({leave_type:item.leaveType,days:item.days})),from_date:leaveForm.fromDate,to_date:leaveForm.toDate,duration:leaveForm.duration,reason:leaveForm.reason.trim()}); await loadHrmsData(); setShowLeaveModal(false);notifySuccess("Leave request submitted","The request is now waiting for HR approval."); }
     catch(error){const message=error instanceof Error?error.message:"Leave request failed";setDataError(message);notifyError("Leave request failed",message);}
+  };
+
+  const handleGeneratePayroll = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPayrollGenerating(true);
+    try {
+      const range=bsMonthToAdRange(payrollMonth);
+      const result=await HrmsService.generatePayroll(range.start,range.end);
+      await loadHrmsData();
+      setShowPayrollModal(false);
+      notifySuccess("Monthly payroll generated",`${result.employee_count} staff payslips were created as a draft for ${formatBsMonth(payrollMonth)}.`);
+    } catch(error){const message=error instanceof Error?error.message:"Payroll could not be generated";setDataError(message);notifyError("Payroll generation failed",message);}
+    finally{setPayrollGenerating(false);}
   };
 
   const updateLeaveDates=(field:"fromDate"|"toDate",value:string)=>setLeaveForm(current=>{const next={...current,[field]:value};const from=new Date(`${next.fromDate}T00:00:00`);const to=new Date(`${next.toDate}T00:00:00`);const fullDays=!Number.isNaN(from.getTime())&&!Number.isNaN(to.getTime())&&to>=from?Math.floor((to.getTime()-from.getTime())/86400000)+1:0;const days=next.duration==="HALF_DAY"?0.5:fullDays;return{...next,days,allocations:next.allocations.length===1?[{...next.allocations[0],days}]:next.allocations}});
@@ -780,7 +796,10 @@ export function HrmsWorkspace() {
               <h3>Monthly Payroll Register & Statutory Deductions</h3>
               <p>Compliant with Nepal Social Security Fund (SSF), CIT & 1% Income Tax TDS</p>
             </div>
-            <span className="status-pill">Fiscal Month: Shrawan 2083</span>
+            <div className="panel-header-actions">
+              <span className="status-pill">Fiscal Month: {formatBsMonth(payrollMonth)}</span>
+              {(["ADMIN","HR_ADMIN","DIRECTOR"] as string[]).includes(profile?.role??"")&&<button type="button" className="btn-primary" onClick={()=>setShowPayrollModal(true)}><Wallet size={15}/><span>Generate Payroll</span></button>}
+            </div>
           </div>
 
           <div className="table-wrapper">
@@ -841,8 +860,30 @@ export function HrmsWorkspace() {
                     </td>
                   </tr>
                 ))}
+                {!payroll.length&&<tr><td colSpan={9} className="payroll-empty-state"><Wallet size={24}/><strong>No payroll generated yet</strong><span>Generate a monthly draft for every eligible staff member.</span></td></tr>}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {showPayrollModal&&(
+        <div className="modal-backdrop-clean" onClick={()=>setShowPayrollModal(false)}>
+          <div className="modal-dialog-clean payroll-generation-modal" onClick={event=>event.stopPropagation()}>
+            <div className="modal-header-clean"><div><span className="page-category-eyebrow">Payroll operations</span><h3>Generate Monthly Payroll</h3><p>Create one controlled draft run for all eligible staff.</p></div><button type="button" className="drawer-close-btn" onClick={()=>setShowPayrollModal(false)}><X size={18}/></button></div>
+            <form onSubmit={handleGeneratePayroll}>
+              <div className="modal-body-clean payroll-generation-body">
+                <div className="payroll-generation-period"><Calendar size={18}/><label><span>Payroll month (BS) *</span><input required pattern="[0-9]{4}-[0-9]{2}" placeholder="2083-05" value={payrollMonth} onChange={event=>setPayrollMonth(event.target.value)}/><small>{formatBsMonth(payrollMonth)} · YYYY-MM format</small></label></div>
+                <div className="payroll-generation-summary">
+                  <article><span>Eligible staff</span><strong>{staffList.filter(item=>["ACTIVE","PROBATION","ON_LEAVE"].includes(item.status)).length}</strong><small>Active payroll profiles</small></article>
+                  <article><span>Gross payroll</span><strong>₨ {staffList.reduce((sum,item)=>sum+item.baseSalary,0).toLocaleString()}</strong><small>Base salary before additions</small></article>
+                  <article><span>SSF deduction</span><strong>11%</strong><small>Employee contribution</small></article>
+                  <article><span>Income TDS</span><strong>1%</strong><small>Draft statutory deduction</small></article>
+                </div>
+                <div className="payroll-generation-note"><AlertCircle size={16}/><div><strong>Review before disbursement</strong><span>This creates a DRAFT only. Existing payroll for the same month cannot be generated twice.</span></div></div>
+              </div>
+              <div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setShowPayrollModal(false)}>Cancel</button><button type="submit" className="btn-primary" disabled={payrollGenerating}>{payrollGenerating?"Generating…":`Generate for ${staffList.length} staff`}</button></div>
+            </form>
           </div>
         </div>
       )}

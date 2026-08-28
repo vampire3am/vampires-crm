@@ -47,3 +47,19 @@ export const formatBsDate = (value: string | Date, style: "numeric" | "medium" =
 };
 
 export const formatBsPeriod = (start: string, end: string) => `${formatBsDate(start)} – ${formatBsDate(end)}`;
+
+export const formatBsMonth = (value: string) => {
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month || month < 1 || month > 12) return "—";
+  return `${NepaliDate.getMonthName(month - 1, true, false)} ${year}`;
+};
+
+export const bsMonthToAdRange = (value: string) => {
+  if (!/^\d{4}-\d{2}$/.test(value)) throw new Error("Use YYYY-MM BS format");
+  const start = bsToAd(`${value}-01`);
+  for (let day = 32; day >= 28; day -= 1) {
+    const candidate = `${value}-${String(day).padStart(2, "0")}`;
+    if (isValidBsDate(candidate)) return { start, end: bsToAd(candidate) };
+  }
+  throw new Error("Invalid BS payroll month");
+};
