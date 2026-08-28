@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { PhoneInput } from "../../components/ui/PhoneInput";
 import { BsDateInput } from "../../components/ui/BsDateInput";
+import { LeaveAllocationPicker, type LeaveAllocation } from "../../components/ui/LeaveAllocationPicker";
 import { HrmsService } from "../../services/hrmsService";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 import { useAuth } from "../auth/AuthProvider";
@@ -64,11 +65,14 @@ interface WorkBreakRecord {
   status: "ACTIVE" | "COMPLETED";
 }
 
+type LeaveType = "Annual Leave" | "Casual Leave" | "Sick Leave" | "Unpaid Leave";
+
 interface LeaveRequest {
   id: string;
   empCode: string;
   fullName: string;
-  leaveType: "Annual Leave" | "Casual Leave" | "Sick Leave" | "Unpaid Leave";
+  leaveType: string;
+  allocations?: LeaveAllocation[];
   fromDate: string;
   toDate: string;
   days: number;
@@ -79,7 +83,7 @@ interface LeaveRequest {
 }
 
 interface LeavePolicy {
-  leaveType: LeaveRequest["leaveType"];
+  leaveType: LeaveType;
   monthlyCredit: number;
   isPaid: boolean;
   allowHalfDay: boolean;
@@ -91,7 +95,7 @@ interface LeaveBalance {
   employeeId: string;
   empCode: string;
   fullName: string;
-  leaveType: LeaveRequest["leaveType"];
+  leaveType: LeaveType;
   monthlyCredit: number;
   opening: number;
   credited: number;
@@ -209,7 +213,7 @@ export function HrmsWorkspace() {
   const [leaveForm, setLeaveForm] = useState({
     empCode: "",
     fullName: "",
-    leaveType: "Casual Leave" as LeaveRequest["leaveType"],
+    allocations: [{ leaveType: "Casual Leave", days: 1 }] as LeaveAllocation[],
     fromDate: new Date().toISOString().slice(0, 10),
     toDate: new Date().toISOString().slice(0, 10),
     days: 1,
@@ -223,7 +227,7 @@ export function HrmsWorkspace() {
     if (!canRequestLeave) return;
     const today=todayAd();
     setDataError("");
-    setLeaveForm({empCode:myAttendance?.employeeCode??"",fullName:myAttendance?.fullName??profile?.full_name??"",leaveType:"Casual Leave",fromDate:today,toDate:today,days:1,duration:"FULL_DAY",reason:""});
+    setLeaveForm({empCode:myAttendance?.employeeCode??"",fullName:myAttendance?.fullName??profile?.full_name??"",allocations:[{leaveType:"Casual Leave",days:1}],fromDate:today,toDate:today,days:1,duration:"FULL_DAY",reason:""});
     setShowLeaveModal(true);
   };
 
@@ -273,11 +277,14 @@ export function HrmsWorkspace() {
     if(!leaveForm.empCode){notifyError("Employee profile unavailable","Ask an administrator to link your login to an active HR employee record.");return}
     if(!leaveForm.fromDate||!leaveForm.toDate||new Date(leaveForm.toDate)<new Date(leaveForm.fromDate)){notifyError("Invalid leave dates","The end date must be the same as or later than the start date.");return}
     if(!leaveForm.reason.trim()){notifyError("Reason required","Add a short reason or handover note before submitting.");return}
-    try { await HrmsService.requestLeave({employee_code:leaveForm.empCode,leave_type:leaveForm.leaveType,from_date:leaveForm.fromDate,to_date:leaveForm.toDate,duration:leaveForm.duration,reason:leaveForm.reason.trim()}); await loadHrmsData(); setShowLeaveModal(false);notifySuccess("Leave request submitted","The request is now waiting for HR approval."); }
+    const allocationTotal=leaveForm.allocations.reduce((sum,item)=>sum+item.days,0);
+    if(!leaveForm.allocations.length||Math.abs(allocationTotal-leaveForm.days)>0.001){notifyError("Complete the leave allocation",`Allocate exactly ${leaveForm.days.toFixed(1)} days across one or more leave categories.`);return}
+    if(leaveForm.allocations.length>1&&(leaveForm.days!==1||leaveForm.fromDate!==leaveForm.toDate)){notifyError("Combined balance is for one full day","Choose one date and Full day to combine two 0.5-day balances.");return}
+    try { await HrmsService.requestLeave({employee_code:leaveForm.empCode,leave_type:leaveForm.allocations[0].leaveType,allocations:leaveForm.allocations.map(item=>({leave_type:item.leaveType,days:item.days})),from_date:leaveForm.fromDate,to_date:leaveForm.toDate,duration:leaveForm.duration,reason:leaveForm.reason.trim()}); await loadHrmsData(); setShowLeaveModal(false);notifySuccess("Leave request submitted","The request is now waiting for HR approval."); }
     catch(error){const message=error instanceof Error?error.message:"Leave request failed";setDataError(message);notifyError("Leave request failed",message);}
   };
 
-  const updateLeaveDates=(field:"fromDate"|"toDate",value:string)=>setLeaveForm(current=>{const next={...current,[field]:value};const from=new Date(`${next.fromDate}T00:00:00`);const to=new Date(`${next.toDate}T00:00:00`);const fullDays=!Number.isNaN(from.getTime())&&!Number.isNaN(to.getTime())&&to>=from?Math.floor((to.getTime()-from.getTime())/86400000)+1:0;return{...next,days:next.duration==="HALF_DAY"?0.5:fullDays}});
+  const updateLeaveDates=(field:"fromDate"|"toDate",value:string)=>setLeaveForm(current=>{const next={...current,[field]:value};const from=new Date(`${next.fromDate}T00:00:00`);const to=new Date(`${next.toDate}T00:00:00`);const fullDays=!Number.isNaN(from.getTime())&&!Number.isNaN(to.getTime())&&to>=from?Math.floor((to.getTime()-from.getTime())/86400000)+1:0;const days=next.duration==="HALF_DAY"?0.5:fullDays;return{...next,days,allocations:next.allocations.length===1?[{...next.allocations[0],days}]:next.allocations}});
 
   const filteredStaff = staffList.filter(s => {
     const matchesDept = deptFilter === "ALL" || s.department === deptFilter;
@@ -643,7 +650,7 @@ export function HrmsWorkspace() {
                 </thead>
                 <tbody>
                   {[...leavePolicies].sort((a, b) => {
-                    const order: LeaveRequest["leaveType"][] = ["Sick Leave", "Casual Leave", "Annual Leave", "Unpaid Leave"];
+                    const order: LeaveType[] = ["Sick Leave", "Casual Leave", "Annual Leave", "Unpaid Leave"];
                     return order.indexOf(a.leaveType) - order.indexOf(b.leaveType);
                   }).map((policy, index) => {
                     const balances = leaveBalances.filter(item => item.leaveType === policy.leaveType);
@@ -658,7 +665,7 @@ export function HrmsWorkspace() {
                           <div className="leave-ledger__particular">
                             <span className={`leave-ledger__marker leave-ledger__marker--${index + 1}`} />
                             <div>
-                              <strong>{policy.leaveType}</strong>
+                          <strong>{policy.leaveType}</strong>
                               <small>{policy.isPaid ? `${policy.monthlyCredit} day monthly entitlement` : "Approved absence without paid entitlement"}</small>
                             </div>
                           </div>
@@ -713,7 +720,7 @@ export function HrmsWorkspace() {
                       <strong style={{ fontSize: "13px" }}>{lv.fullName}</strong>
                     </td>
                     <td>
-                      <span className="badge-status application">{lv.leaveType}</span>
+                      <span className="badge-status application">{lv.allocations?.length ? lv.allocations.map(item=>`${item.leaveType.replace(" Leave","")} ${item.days}`).join(" + ") : lv.leaveType}</span>
                     </td>
                     <td>
                       <span style={{ fontSize: "12px" }}>{formatBsDate(lv.fromDate)} to {formatBsDate(lv.toDate)}</span>
@@ -1091,20 +1098,12 @@ export function HrmsWorkspace() {
                   </div>
 
                   <div className="form-group">
-                    <label>Leave Category *</label>
-                    <select
-                      value={leaveForm.leaveType}
-                      onChange={e => setLeaveForm({ ...leaveForm, leaveType: e.target.value as LeaveRequest["leaveType"] })}
-                    >{leavePolicies.map(policy=><option value={policy.leaveType} key={policy.leaveType}>{policy.leaveType}{policy.isPaid?` · ${policy.monthlyCredit}/month`:""}</option>)}</select>
+                    <label>Duration *</label>
+                    <select value={leaveForm.duration} onChange={e=>setLeaveForm(current=>{const duration=e.target.value as "FULL_DAY"|"HALF_DAY";const days=duration==="HALF_DAY"?0.5:Math.max(1,current.days);return{...current,duration,toDate:duration==="HALF_DAY"?current.fromDate:current.toDate,days,allocations:[{leaveType:current.allocations[0]?.leaveType??"Casual Leave",days}]}})}>
+                      <option value="FULL_DAY">Full day</option>
+                      <option value="HALF_DAY">Half day (0.5)</option>
+                    </select>
                   </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Duration *</label>
-                  <select value={leaveForm.duration} onChange={e=>setLeaveForm(current=>{const duration=e.target.value as "FULL_DAY"|"HALF_DAY";return{...current,duration,toDate:duration==="HALF_DAY"?current.fromDate:current.toDate,days:duration==="HALF_DAY"?0.5:Math.max(1,current.days)}})}>
-                    <option value="FULL_DAY">Full day</option>
-                    <option value="HALF_DAY">Half day (0.5)</option>
-                  </select>
                 </div>
 
                 <div className="form-row-2">
@@ -1119,6 +1118,8 @@ export function HrmsWorkspace() {
                 </div>
 
                 <div className="hrms-leave-duration"><Calendar size={16}/><span>Requested duration</span><strong>{leaveForm.days||0} {leaveForm.days===1?"day":"days"}</strong></div>
+
+                <LeaveAllocationPicker policies={leavePolicies} balances={leaveBalances.filter(item=>item.empCode===leaveForm.empCode)} requestedDays={leaveForm.days} value={leaveForm.allocations} onChange={allocations=>setLeaveForm(current=>({...current,allocations}))}/>
 
                 <div className="form-group">
                   <label>Reason / Handover Notes *</label>

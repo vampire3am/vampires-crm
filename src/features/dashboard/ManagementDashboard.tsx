@@ -42,6 +42,7 @@ import {
 import { useAuth } from "../auth/AuthProvider";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 import { BsDateInput } from "../../components/ui/BsDateInput";
+import { LeaveAllocationPicker, type LeaveAllocation } from "../../components/ui/LeaveAllocationPicker";
 import { todayAd } from "../../lib/nepaliDate";
 
 interface DashboardLeave {
@@ -67,19 +68,26 @@ export function ManagementDashboard() {
   const [, setAttendanceClock] = useState(0);
   const [myAttendance, setMyAttendance] = useState<Awaited<ReturnType<typeof HrmsService.getMyTodayAttendance>>>(null);
   const [myLeaves, setMyLeaves] = useState<DashboardLeave[]>([]);
+  const [leavePolicies, setLeavePolicies] = useState<Array<{leaveType:string;monthlyCredit:number;isPaid:boolean}>>([]);
+  const [leaveBalances, setLeaveBalances] = useState<Array<{leaveType:string;closing:number}>>([]);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
-  const [leaveForm, setLeaveForm] = useState({ leaveType: "Casual Leave", fromDate: "", toDate: "", days: 0, duration:"FULL_DAY" as "FULL_DAY"|"HALF_DAY", reason: "" });
+  const [leaveForm, setLeaveForm] = useState({ allocations:[{leaveType:"Casual Leave",days:1}] as LeaveAllocation[], fromDate: "", toDate: "", days: 0, duration:"FULL_DAY" as "FULL_DAY"|"HALF_DAY", reason: "" });
   const canRequestLeave = Boolean(profile && profile.role !== "ADMIN");
 
   const loadMyLeaves = async () => {
     if (!canRequestLeave) return;
-    try { setMyLeaves(await HrmsService.getMyLeaves() as DashboardLeave[]); } catch { setMyLeaves([]); }
+    try {
+      const [requests,policies,balances]=await Promise.all([HrmsService.getMyLeaves(),HrmsService.getLeavePolicies(),HrmsService.getLeaveBalances()]);
+      setMyLeaves(requests as DashboardLeave[]);
+      setLeavePolicies(policies);
+      setLeaveBalances(balances);
+    } catch { setMyLeaves([]); }
   };
 
   const openLeaveModal = () => {
     const today = todayAd();
-    setLeaveForm({ leaveType: "Casual Leave", fromDate: today, toDate: today, days: 1, duration:"FULL_DAY", reason: "" });
+    setLeaveForm({ allocations:[{leaveType:"Casual Leave",days:1}], fromDate: today, toDate: today, days: 1, duration:"FULL_DAY", reason: "" });
     setShowLeaveModal(true);
   };
 
@@ -88,16 +96,20 @@ export function ManagementDashboard() {
     const from = new Date(`${next.fromDate}T00:00:00`);
     const to = new Date(`${next.toDate}T00:00:00`);
     const days = !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && to >= from ? Math.floor((to.getTime() - from.getTime()) / 86400000) + 1 : 0;
-    return { ...next, days:next.duration==="HALF_DAY"?0.5:days };
+    const requestedDays=next.duration==="HALF_DAY"?0.5:days;
+    return { ...next, days:requestedDays, allocations:next.allocations.length===1?[{...next.allocations[0],days:requestedDays}]:next.allocations };
   });
 
   const submitLeaveRequest = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!leaveForm.days) return notifyError("Check the leave dates", "The end date cannot be before the start date.");
     if (!leaveForm.reason.trim()) return notifyError("Reason required", "Add a short reason or handover note before submitting.");
+    const allocationTotal=leaveForm.allocations.reduce((sum,item)=>sum+item.days,0);
+    if(!leaveForm.allocations.length||Math.abs(allocationTotal-leaveForm.days)>0.001)return notifyError("Complete the leave allocation",`Allocate exactly ${leaveForm.days.toFixed(1)} days across the selected categories.`);
+    if(leaveForm.allocations.length>1&&(leaveForm.days!==1||leaveForm.fromDate!==leaveForm.toDate))return notifyError("Combined balance is for one full day","Choose one date and Full day to combine two 0.5-day balances.");
     setLeaveSubmitting(true);
     try {
-      await HrmsService.requestLeave({ leave_type: leaveForm.leaveType, from_date: leaveForm.fromDate, to_date: leaveForm.toDate, duration:leaveForm.duration, reason: leaveForm.reason.trim() });
+      await HrmsService.requestLeave({ leave_type: leaveForm.allocations[0].leaveType, allocations:leaveForm.allocations.map(item=>({leave_type:item.leaveType,days:item.days})), from_date: leaveForm.fromDate, to_date: leaveForm.toDate, duration:leaveForm.duration, reason: leaveForm.reason.trim() });
       await loadMyLeaves();
       setShowLeaveModal(false);
       notifySuccess("Leave request submitted", "Your request is now waiting for HR approval.");
@@ -255,10 +267,10 @@ export function ManagementDashboard() {
           <form onSubmit={submitLeaveRequest}>
             <div className="modal-body-clean">
               <div className="hrms-self-applicant"><CalendarDays size={17}/><div><strong>{myAttendance?.fullName || profile?.full_name || "Staff member"}</strong><span>{myAttendance?.employeeCode || "Linked employee profile"}</span></div></div>
-              <div className="form-group"><label>Leave category *</label><select required value={leaveForm.leaveType} onChange={event=>setLeaveForm({...leaveForm,leaveType:event.target.value})}><option>Annual Leave</option><option>Casual Leave</option><option>Sick Leave</option><option>Unpaid Leave</option></select></div>
-              <div className="form-group"><label>Duration *</label><select value={leaveForm.duration} onChange={event=>setLeaveForm(current=>{const duration=event.target.value as "FULL_DAY"|"HALF_DAY";return{...current,duration,toDate:duration==="HALF_DAY"?current.fromDate:current.toDate,days:duration==="HALF_DAY"?0.5:Math.max(1,current.days)}})}><option value="FULL_DAY">Full day</option><option value="HALF_DAY">Half day (0.5)</option></select></div>
+              <div className="form-group"><label>Duration *</label><select value={leaveForm.duration} onChange={event=>setLeaveForm(current=>{const duration=event.target.value as "FULL_DAY"|"HALF_DAY";const days=duration==="HALF_DAY"?0.5:Math.max(1,current.days);return{...current,duration,toDate:duration==="HALF_DAY"?current.fromDate:current.toDate,days,allocations:[{leaveType:current.allocations[0]?.leaveType??"Casual Leave",days}]}})}><option value="FULL_DAY">Full day</option><option value="HALF_DAY">Half day (0.5)</option></select></div>
               <div className="form-row-2"><div className="form-group"><label>From date (BS) *</label><BsDateInput required value={leaveForm.fromDate} onChange={value=>updateLeaveDate("fromDate",value)}/></div><div className="form-group"><label>To date (BS) *</label><BsDateInput required disabled={leaveForm.duration==="HALF_DAY"} value={leaveForm.toDate} onChange={value=>updateLeaveDate("toDate",value)}/></div></div>
               <div className="hrms-leave-duration"><CalendarDays size={16}/><span>Requested duration</span><strong>{leaveForm.days} {leaveForm.days===1?"day":"days"}</strong></div>
+              <LeaveAllocationPicker policies={leavePolicies} balances={leaveBalances} requestedDays={leaveForm.days} value={leaveForm.allocations} onChange={allocations=>setLeaveForm(current=>({...current,allocations}))}/>
               <div className="form-group"><label>Reason / handover notes *</label><textarea required rows={4} value={leaveForm.reason} onChange={event=>setLeaveForm({...leaveForm,reason:event.target.value})} placeholder="Explain the reason and any work that needs handing over…"/></div>
             </div>
             <div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setShowLeaveModal(false)}>Cancel</button><button type="submit" className="btn-primary" disabled={leaveSubmitting}>{leaveSubmitting?"Submitting…":"Submit request"}</button></div>
