@@ -617,17 +617,77 @@ export function HrmsWorkspace() {
             </button>}
           </div>
 
-          <div className="hrms-leave-policy-grid">
-            {leavePolicies.map(policy => {
-              const policyBalances=leaveBalances.filter(item=>item.leaveType===policy.leaveType);
-              const available=policyBalances.reduce((sum,item)=>sum+item.closing,0);
-              return <article key={policy.leaveType} className="hrms-leave-policy-card">
-                <div><span>{policy.leaveType}</span><strong>{policy.isPaid?available.toFixed(1):"Approval"}</strong></div>
-                <small>{policy.isPaid?`${policy.monthlyCredit} day credited monthly · ${policyBalances.length} staff balance${policyBalances.length===1?"":"s"}`:"No entitlement balance · payroll deduction applies"}</small>
-                <em>{policy.yearEndAction==="CARRY_FORWARD"?`Year-end carry up to ${policy.maxYearEndCarry??"company limit"} days`:"Resets at the configured leave-year end"}</em>
-              </article>;
-            })}
-          </div>
+          <section className="leave-ledger" aria-labelledby="leave-ledger-heading">
+            <div className="leave-ledger__header">
+              <div>
+                <span className="leave-ledger__eyebrow">CURRENT LEAVE YEAR</span>
+                <h4 id="leave-ledger-heading">Leave Balance Ledger</h4>
+                <p>Consolidated staff entitlement, monthly credit, utilisation and available balance.</p>
+              </div>
+              <span className="leave-ledger__scope">
+                <Users size={14} /> {new Set(leaveBalances.map(item => item.employeeId)).size} employee {new Set(leaveBalances.map(item => item.employeeId)).size === 1 ? "record" : "records"}
+              </span>
+            </div>
+            <div className="table-wrapper">
+              <table className="crm-table leave-ledger__table">
+                <thead>
+                  <tr>
+                    <th className="leave-ledger__serial">S.N.</th>
+                    <th>Particular</th>
+                    <th>Opening</th>
+                    <th>This Month</th>
+                    <th>Leave Taken</th>
+                    <th>Balance</th>
+                    <th>Year-End Rule</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...leavePolicies].sort((a, b) => {
+                    const order: LeaveRequest["leaveType"][] = ["Sick Leave", "Casual Leave", "Annual Leave", "Unpaid Leave"];
+                    return order.indexOf(a.leaveType) - order.indexOf(b.leaveType);
+                  }).map((policy, index) => {
+                    const balances = leaveBalances.filter(item => item.leaveType === policy.leaveType);
+                    const opening = balances.reduce((sum, item) => sum + item.opening, 0);
+                    const credited = balances.reduce((sum, item) => sum + item.credited + item.adjusted, 0);
+                    const used = balances.reduce((sum, item) => sum + item.used, 0);
+                    const closing = balances.reduce((sum, item) => sum + item.closing, 0);
+                    return (
+                      <tr key={policy.leaveType}>
+                        <td className="leave-ledger__serial">{index + 1}.</td>
+                        <td>
+                          <div className="leave-ledger__particular">
+                            <span className={`leave-ledger__marker leave-ledger__marker--${index + 1}`} />
+                            <div>
+                              <strong>{policy.leaveType}</strong>
+                              <small>{policy.isPaid ? `${policy.monthlyCredit} day monthly entitlement` : "Approved absence without paid entitlement"}</small>
+                            </div>
+                          </div>
+                        </td>
+                        <td><span className="leave-ledger__number">{opening.toFixed(1)}</span></td>
+                        <td><span className="leave-ledger__credit">+{credited.toFixed(1)}</span></td>
+                        <td><span className="leave-ledger__used">{used.toFixed(1)}</span></td>
+                        <td><strong className="leave-ledger__balance">{closing.toFixed(1)}</strong></td>
+                        <td>
+                          <span className="leave-ledger__rule">
+                            {policy.yearEndAction === "CARRY_FORWARD"
+                              ? `Carry forward · max ${policy.maxYearEndCarry ?? "policy"} days`
+                              : "Resets at year-end"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!leavePolicies.length && (
+                    <tr><td colSpan={7} className="leave-ledger__empty">No leave policies are configured.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="leave-ledger__footer">
+              <span>Balances refresh automatically after every HR decision.</span>
+              <span>Figures are shown in days.</span>
+            </div>
+          </section>
 
           <div className="table-wrapper">
             <table className="crm-table">
