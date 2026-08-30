@@ -62,7 +62,8 @@ export const StaffAdminService = {
     if (error) throw error;
     return (data ?? []).map(item => item.permission_name);
   },
-  create(input: StaffAdminInput) { return invoke({ action: "create", ...input }); },
+  create(input: StaffAdminInput) { return invoke({ action: "create", ...input }) as Promise<{ok: boolean; user_id: string; employee_id: string}>; },
   update(id: string, input: StaffAdminInput) { return invoke({ action: "update", user_id: id, ...input }); },
+  async employeeId(staffProfileId: string) { const { data, error } = await supabase.from("hr_employees").select("id").eq("staff_profile_id", staffProfileId).maybeSingle(); if (error) throw error; return data?.id as string | undefined; },
   setPassword(id: string, password: string) { return invoke({ action: "set_password", user_id: id, password }); },
 };

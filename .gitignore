@@ -55,6 +55,6 @@ data/*.json
 # local development and preview artifacts
 /.preview/
 /.preview-server.mjs
-/.npm-cache/
+/.npm-cache*/
 /work-vite.stdout.log
 /work-vite.stderr.log

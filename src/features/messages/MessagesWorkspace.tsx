@@ -71,7 +71,6 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  AECS_CHANNELS,
   type ChatAttachment,
   type ChatChannel,
   type ChatMessage,
@@ -134,6 +133,10 @@ export function MessagesWorkspace() {
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showTagModal, setShowTagModal] = useState(false);
+  const [showGroupModal,setShowGroupModal]=useState(false);
+  const [groupForm,setGroupForm]=useState({name:"",description:"",memberIds:[] as string[]});
+  const [groupSaving,setGroupSaving]=useState(false);
+  const [groupError,setGroupError]=useState("");
   const [selectedStudentTag, setSelectedStudentTag] = useState<{ code: string; name: string } | null>(null);
   const [stagedAttachments, setStagedAttachments] = useState<ChatAttachment[]>([]);
   const [showInfoSidebar, setShowInfoSidebar] = useState(false);
@@ -337,6 +340,8 @@ export function MessagesWorkspace() {
   const handleSendThumbsUp = () => {
     handleSendMessage("👍");
   };
+  const toggleGroupMember=(id:string)=>setGroupForm(current=>({...current,memberIds:current.memberIds.includes(id)?current.memberIds.filter(item=>item!==id):[...current.memberIds,id]}));
+  const createGroup=async()=>{try{setGroupSaving(true);setGroupError("");if(groupForm.name.trim().length<2)throw new Error("Enter a group name with at least 2 characters.");if(!groupForm.memberIds.length)throw new Error("Select at least one other staff member.");const id=await MessagingService.createStaffGroup({name:groupForm.name.trim(),description:groupForm.description.trim(),memberIds:groupForm.memberIds});await loadMessages();handleSelectChannel(id);setShowGroupModal(false);setGroupForm({name:"",description:"",memberIds:[]})}catch(reason){setGroupError(reason instanceof Error?reason.message:"The staff group could not be created.")}finally{setGroupSaving(false)}};
 
   // Toggle Reaction
   const handleReaction = async (messageId: string, emoji: string) => {
@@ -376,6 +381,7 @@ export function MessagesWorkspace() {
                 >
                   <Tag size={16} />
                 </button>
+                <button type="button" className="messenger-icon-btn" onClick={()=>{setGroupError("");setShowGroupModal(true)}} title="Create a staff group" aria-label="Create staff group"><UserPlus size={16}/></button>
               </div>
             </div>
 
@@ -454,7 +460,7 @@ export function MessagesWorkspace() {
                 );
               })
             ) : (
-              /* 18 Staff Direct Messages (Sorted with active conversations on top) */
+              /* Active staff direct messages, sorted with recent conversations first */
               sortedStaffList.map(staff => {
                 const isActive = activeRecipientId === staff.id;
                 const summary = conversationSummaries[staff.id];
@@ -947,6 +953,13 @@ export function MessagesWorkspace() {
       {/* =========================================================================
           MODAL: TAG STUDENT CASE
           ========================================================================= */}
+      <AnimatePresence>
+        {showGroupModal&&<div className="modal-backdrop-clean" onClick={()=>setShowGroupModal(false)}><motion.div initial={{scale:.96,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:.96,opacity:0}} className="modal-dialog-clean staff-group-modal" onClick={event=>event.stopPropagation()}>
+          <div className="modal-header-clean"><div><span className="staff-group-eyebrow">AECS internal communications</span><h3>Create staff group</h3><p>Start a private workspace with selected Bagbazar staff members.</p></div><button type="button" className="drawer-close-btn" onClick={()=>setShowGroupModal(false)}><X size={18}/></button></div>
+          <div className="modal-body-clean"><label className="staff-group-field"><span>Group name *</span><input value={groupForm.name} maxLength={80} onChange={event=>setGroupForm({...groupForm,name:event.target.value})} placeholder="Example: Admissions operations"/></label><label className="staff-group-field"><span>Description</span><textarea value={groupForm.description} maxLength={300} onChange={event=>setGroupForm({...groupForm,description:event.target.value})} placeholder="What should this group coordinate?"/></label><div className="staff-group-member-head"><div><strong>Select staff members</strong><small>You are added automatically.</small></div><span>{groupForm.memberIds.length} selected</span></div><div className="staff-group-member-list">{staffUsers.filter(member=>member.id!==currentUserId).map(member=><label key={member.id} className={groupForm.memberIds.includes(member.id)?"selected":""}><input type="checkbox" checked={groupForm.memberIds.includes(member.id)} onChange={()=>toggleGroupMember(member.id)}/><span className="staff-group-avatar" style={{background:member.avatarBg}}>{member.fullName.slice(0,2).toUpperCase()}</span><div><strong>{member.fullName}</strong><small>{member.role} · {member.department}</small></div><Check size={15}/></label>)}</div>{groupError&&<div className="staff-group-error"><AlertCircle size={15}/>{groupError}</div>}</div>
+          <div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setShowGroupModal(false)}>Cancel</button><button type="button" className="btn-primary" disabled={groupSaving||!groupForm.name.trim()||!groupForm.memberIds.length} onClick={()=>void createGroup()}><Users size={15}/>{groupSaving?"Creating…":"Create group"}</button></div>
+        </motion.div></div>}
+      </AnimatePresence>
       <AnimatePresence>
         {showTagModal && (
           <div className="modal-backdrop-clean" onClick={() => setShowTagModal(false)}>

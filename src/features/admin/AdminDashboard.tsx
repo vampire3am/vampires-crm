@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   AlertTriangle,
   Building2,
   Check,
+  ChevronDown,
+  ChevronRight,
   CreditCard,
   Globe2,
   Lock,
@@ -12,8 +14,8 @@ import {
   SlidersHorizontal,
   UserPlus,
 } from "lucide-react";
-import { BLUEPRINT_ROLES, MAKER_CHECKER_RULES, SENSITIVE_PERMISSIONS } from "../../lib/blueprintRolesData";
-import { AdminService, type OrganizationForm } from "../../services/adminService";
+import { MAKER_CHECKER_RULES, SENSITIVE_PERMISSIONS } from "../../lib/blueprintRolesData";
+import { AdminService, type LiveRoleMatrix, type OrganizationForm } from "../../services/adminService";
 import { StaffManagement } from "./StaffManagement";
 import { AECS_ORGANIZATION } from "../../config/organization";
 import { HrmsService } from "../../services/hrmsService";
@@ -36,7 +38,9 @@ export function AdminDashboard() {
   const [roleSearch, setRoleSearch] = useState<string>("");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [liveCounts, setLiveCounts] = useState({branches:0,roles:0,audits:0});
+  const [liveCounts, setLiveCounts] = useState({branches:0,roles:0,audits:0,staff:0});
+  const [roleMatrix,setRoleMatrix]=useState<LiveRoleMatrix[]>([]);
+  const [expandedRole,setExpandedRole]=useState<string | null>(null);
   const [leavePolicies, setLeavePolicies] = useState<LeavePolicyForm[]>([]);
 
   // Form State
@@ -53,7 +57,7 @@ export function AdminDashboard() {
     email: "",
   });
 
-  useEffect(()=>{Promise.all([AdminService.getOrganization(),AdminService.getCounts(),HrmsService.getLeavePolicies()]).then(([organization,counts,policies])=>{if(organization)setOrgForm(organization);setLiveCounts(counts);setLeavePolicies(policies as LeavePolicyForm[])}).catch(error=>setSaveError(error instanceof Error?error.message:"Administration data could not be loaded"))},[]);
+  useEffect(()=>{Promise.all([AdminService.getOrganization(),AdminService.getCounts(),HrmsService.getLeavePolicies(),AdminService.getRoleMatrix()]).then(([organization,counts,policies,matrix])=>{if(organization)setOrgForm(organization);setLiveCounts(counts);setLeavePolicies(policies as LeavePolicyForm[]);setRoleMatrix(matrix)}).catch(error=>setSaveError(error instanceof Error?error.message:"Administration data could not be loaded"))},[]);
 
   const handleSaveSettings = async () => {
     try{
@@ -66,12 +70,10 @@ export function AdminDashboard() {
     }catch(error){setSaveError(error instanceof Error?error.message:"Settings could not be saved")}
   };
 
-  const filteredRoles = BLUEPRINT_ROLES.filter(
-    r =>
-      r.name.toLowerCase().includes(roleSearch.toLowerCase()) ||
-      r.code.toLowerCase().includes(roleSearch.toLowerCase()) ||
-      r.coreAccess.toLowerCase().includes(roleSearch.toLowerCase())
-  );
+  const filteredRoles = roleMatrix.filter(item=>`${item.role} ${item.permissions.join(" ")}`.toLowerCase().includes(roleSearch.toLowerCase()));
+  const roleName=(role:string)=>role.replaceAll("_"," ").toLowerCase().replace(/\b\w/g,letter=>letter.toUpperCase());
+  const permissionName=(permission:string)=>permission.split(".").at(-1)?.replaceAll("_"," ").replace(/\b\w/g,letter=>letter.toUpperCase())??permission;
+  const permissionGroups=(permissions:string[])=>Object.entries(permissions.reduce<Record<string,string[]>>((groups,permission)=>{const module=permission.split(".")[0];(groups[module]??=[]).push(permission);return groups},{})).sort(([left],[right])=>left.localeCompare(right));
 
   return (
     <div className="page-container">
@@ -81,7 +83,7 @@ export function AdminDashboard() {
         <div className="page-header-titles">
           <h2>System Settings & Enterprise Governance</h2>
           <p>
-            Organization parameters, multi-branch setup, 18-role RBAC matrix, and maker-checker segregation rules.
+            Organization parameters, the Bagbazar office, live staff access roles, and maker-checker segregation rules.
           </p>
         </div>
         <div className="page-header-actions">
@@ -100,13 +102,13 @@ export function AdminDashboard() {
       <div className="metrics-grid-4">
         <div className="metric-box">
           <div className="metric-header">
-            <span className="metric-label">Operating Hubs</span>
+            <span className="metric-label">Operating Office</span>
             <div className="metric-icon-wrap blue">
               <Building2 size={17} />
             </div>
           </div>
-          <div className="metric-value">{liveCounts.branches} Branches</div>
-          <span className="metric-sub">Active database records</span>
+          <div className="metric-value">Bagbazar</div>
+          <span className="metric-sub">One official AECS office</span>
         </div>
 
         <div className="metric-box">
@@ -122,13 +124,13 @@ export function AdminDashboard() {
 
         <div className="metric-box">
           <div className="metric-header">
-            <span className="metric-label">Master Chart of Accounts</span>
+            <span className="metric-label">Active Staff</span>
             <div className="metric-icon-wrap amber">
               <CreditCard size={17} />
             </div>
           </div>
-          <div className="metric-value">454 Accounts</div>
-          <span className="metric-sub">1000–8000 Master Ledger</span>
+          <div className="metric-value">{liveCounts.staff} Staff</div>
+          <span className="metric-sub">Current active staff profiles</span>
         </div>
 
         <div className="metric-box">
@@ -157,7 +159,7 @@ export function AdminDashboard() {
           onClick={() => setActiveTab("branches")}
         >
           <Globe2 size={16} />
-          <span>Branches & Cost Centres</span>
+          <span>Bagbazar Office & Cost Centre</span>
         </button>
         <button
           className={activeTab === "staff" ? "active" : ""}
@@ -171,7 +173,7 @@ export function AdminDashboard() {
           onClick={() => setActiveTab("roles")}
         >
           <ShieldCheck size={16} />
-          <span>18 CRM Roles & Permissions Matrix</span>
+          <span>CRM Roles & Permissions</span>
         </button>
         <button
           className={activeTab === "hrms" ? "active" : ""}
@@ -312,13 +314,13 @@ export function AdminDashboard() {
         <div className="crm-panel">
           <div className="panel-header-bar">
             <div>
-              <h3>AECS Multi-Branch Architecture</h3>
-              <p>Operating hubs, branch managers, and cost centre ledger assignments</p>
+              <h3>AECS Bagbazar Office</h3>
+              <p>The CRM operates from one official office and one cost centre.</p>
             </div>
-            <span className="status-pill">0 Active Hubs</span>
+            <span className="status-pill">1 Active Office</span>
           </div>
 
-          <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+          <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
             <div style={{ padding: "18px", borderRadius: "var(--radius-sm)", background: "var(--bg-card-subtle)", border: "1px solid var(--border-subtle)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
                 <span className="account-code-cell">BRANCH-KTM-01</span>
@@ -336,7 +338,7 @@ export function AdminDashboard() {
                 </div>
                 <div>
                   <span style={{ color: "var(--text-muted)", display: "block" }}>Active Staff:</span>
-                  <strong>0 Officers</strong>
+                  <strong>{liveCounts.staff} Officers</strong>
                 </div>
                 <div>
                   <span style={{ color: "var(--text-muted)", display: "block" }}>Contact Desk:</span>
@@ -349,40 +351,11 @@ export function AdminDashboard() {
               </div>
             </div>
 
-            <div style={{ padding: "18px", borderRadius: "var(--radius-sm)", background: "var(--bg-card-subtle)", border: "1px solid var(--border-subtle)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-                <span className="account-code-cell">OFFICIAL-PROFILE</span>
-                <span className="badge-status counselling">Verified AECS Details</span>
-              </div>
-              <strong style={{ fontSize: "15px", color: "var(--text-main)", display: "block" }}>Global Education & Test Preparation</strong>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)", display: "block", marginTop: "2px" }}>
-                IELTS · PTE Academic · Duolingo · Study Abroad
-              </span>
-
-              <div style={{ borderTop: "1px solid var(--border-subtle)", marginTop: "14px", paddingTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "12px" }}>
-                <div>
-                  <span style={{ color: "var(--text-muted)", display: "block" }}>Visa Success:</span>
-                  <strong>{AECS_ORGANIZATION.achievements.visaSuccessRate}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "var(--text-muted)", display: "block" }}>Students Guided:</span>
-                  <strong>{AECS_ORGANIZATION.achievements.studentsGuided}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "var(--text-muted)", display: "block" }}>Partner Universities:</span>
-                  <strong>{AECS_ORGANIZATION.achievements.partnerUniversities}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "var(--text-muted)", display: "block" }}>Recognition:</span>
-                  <span>Pearson Top Achiever · 3 Years</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}
 
-      {/* TAB 3: 18 CRM ROLES & PERMISSIONS */}
+      {/* Live CRM roles and permissions */}
       {activeTab === "roles" && (
         <div className="crm-panel">
           <div className="filter-toolbar">
@@ -395,40 +368,30 @@ export function AdminDashboard() {
                 placeholder="Search by role title, code, or permission scope…"
               />
             </div>
-            <span className="status-pill">18 Core Roles Defined</span>
+            <span className="status-pill">{roleMatrix.length} Active Role Templates</span>
           </div>
 
-          <div className="table-wrapper">
-            <table className="crm-table">
+          <div className="table-wrapper role-directory-wrap">
+            <table className="crm-table role-directory-table">
               <thead>
                 <tr>
-                  <th style={{ width: "160px" }}>Role Code</th>
-                  <th>Designation / Title</th>
-                  <th>Default Scope</th>
-                  <th>Permission Scope & Authority Level</th>
-                  <th>Key Restriction</th>
+                  <th>Role</th>
+                  <th>Access coverage</th>
+                  <th>Effective actions</th>
+                  <th aria-label="Role actions" />
                 </tr>
               </thead>
               <tbody>
-                {filteredRoles.map(role => (
-                  <tr key={role.code}>
-                    <td>
-                      <span className="account-code-cell">{role.code}</span>
-                    </td>
-                    <td>
-                      <strong style={{ fontSize: "13px", color: "var(--text-main)" }}>{role.name}</strong>
-                    </td>
-                    <td>
-                      <span className="badge-status application">{role.defaultScope}</span>
-                    </td>
-                    <td style={{ fontSize: "12px", color: "var(--text-main)" }}>
-                      {role.coreAccess}
-                    </td>
-                    <td style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
-                      {role.keyRestriction}
-                    </td>
+                {filteredRoles.map(role => {const groups=permissionGroups(role.permissions);const expanded=expandedRole===role.role;return <Fragment key={role.role}>
+                  <tr className={expanded?"role-directory-row expanded":"role-directory-row"}>
+                    <td><div className="role-identity"><span>{roleName(role.role).slice(0,2).toUpperCase()}</span><div><strong>{roleName(role.role)}</strong><small>{role.role}</small></div></div></td>
+                    <td><div className="role-module-summary">{groups.slice(0,4).map(([module,actions])=><span key={module}>{roleName(module)} <b>{actions.length}</b></span>)}{groups.length>4&&<span className="more">+{groups.length-4} modules</span>}</div></td>
+                    <td><div className="role-action-count"><strong>{role.permissions.length}</strong><span>enabled permissions across {groups.length} modules</span></div></td>
+                    <td><button type="button" className="role-expand-button" onClick={()=>setExpandedRole(expanded?null:role.role)} aria-expanded={expanded}>{expanded?<ChevronDown size={15}/>:<ChevronRight size={15}/>}<span>{expanded?"Hide permissions":"View permissions"}</span></button></td>
                   </tr>
-                ))}
+                  {expanded&&<tr className="role-permission-detail"><td colSpan={4}><div className="role-permission-shell"><header><div><strong>{roleName(role.role)} access template</strong><span>These are the live defaults used when a staff account is assigned this role.</span></div><span>{role.permissions.length} enabled</span></header><div className="role-permission-grid">{groups.map(([module,permissions])=><section key={module}><h4>{roleName(module)} <span>{permissions.length}</span></h4>{permissions.map(permission=><div key={permission}><span className="role-permission-check"><Check size={11}/></span><div><strong>{permissionName(permission)}</strong><small>{permission}</small></div></div>)}</section>)}</div></div></td></tr>}
+                </Fragment>})}
+                {!filteredRoles.length&&<tr><td colSpan={4} className="admin-empty">No role templates match your search.</td></tr>}
               </tbody>
             </table>
           </div>

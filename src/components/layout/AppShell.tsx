@@ -58,8 +58,8 @@ const SEARCH_ITEMS = [
   { label: "HRMS - Attendance Clock-In", detail: "Biometric and daily punch-in log", to: "/hrms?tab=attendance", icon: Clock },
   { label: "Team Messages Hub", detail: "Private staff messaging, channels & calling", to: "/messages", icon: MessageSquare },
   { label: "Email Automation & Drips", detail: "Automated student lifecycle notifications & intake auto-responders", to: "/email-automation", icon: Mail },
-  { label: "50 Core Blueprint Reports", detail: "Operations, finance, and management reports", to: "/analytics", icon: BarChart3 },
-  { label: "Users & RBAC Permissions", detail: "18-role security matrix and maker-checker", to: "/settings?tab=roles", icon: ShieldCheck },
+  { label: "Live CRM Reports", detail: "Generate reports from current operational records", to: "/analytics", icon: BarChart3 },
+  { label: "Users & RBAC Permissions", detail: "Active role permissions and maker-checker controls", to: "/settings?tab=roles", icon: ShieldCheck },
   { label: "Settings & ERP Blueprint", detail: "Organization, branches, and statutory profile", to: "/settings", icon: Settings },
 ];
 
@@ -132,7 +132,7 @@ export function AppShell() {
     if (location.pathname.startsWith("/finance")) return "Finance & Chart of Accounts";
     if (location.pathname.startsWith("/messages")) return "Team Messages & Collaboration Hub";
     if (location.pathname.startsWith("/email-automation")) return "Email Automation & Drip Campaigns";
-    if (location.pathname.startsWith("/analytics")) return "Analytics & 50 Core Reports";
+    if (location.pathname.startsWith("/analytics")) return "Live CRM Reports & Analytics";
     if (location.pathname.startsWith("/settings")) return "System Settings & RBAC";
     return "Operations Workspace";
   }, [location.pathname]);
@@ -357,11 +357,19 @@ export function AppShell() {
                 {hrmsOpen && (
                   <div className="sidebar-submenu">
                     <NavLink
+                      to="/hrms?tab=dashboard"
+                      className={({ isActive }) => (isActive && (location.search.includes("tab=dashboard") || !location.search) ? "sidebar-sublink active" : "sidebar-sublink")}
+                    >
+                      <LayoutDashboard size={14} />
+                      <span>HR Dashboard</span>
+                    </NavLink>
+
+                    <NavLink
                       to="/hrms?tab=staff"
-                      className={({ isActive }) => (isActive && (location.search.includes("tab=staff") || !location.search) ? "sidebar-sublink active" : "sidebar-sublink")}
+                      className={({ isActive }) => (isActive && location.search.includes("tab=staff") ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
                       <Users size={14} />
-                      <span>Employees & Overview</span>
+                      <span>Employees</span>
                     </NavLink>
 
                     <NavLink

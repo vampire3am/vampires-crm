@@ -260,7 +260,7 @@ export default function App() {
               }
             />
 
-            {/* Team Messages (All 18 Staff Can Chat Privately) */}
+            {/* Private and staff-group messaging */}
             <Route
               path="/messages"
               element={

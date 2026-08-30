@@ -1,8 +1,9 @@
-import { Check, KeyRound, Pencil, Plus, Search, ShieldCheck, UserCheck, X } from "lucide-react";
+import { Camera, Check, KeyRound, Pencil, Plus, Search, ShieldCheck, UserCheck, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { StaffRole } from "../auth/AuthProvider";
 import { STAFF_ROLES, StaffAdminService, type StaffAdminInput, type StaffAdminRecord } from "../../services/staffAdminService";
 import { modulesForPermissions, STAFF_PERMISSION_GROUPS } from "./staffPermissionCatalog";
+import { HrmsService } from "../../services/hrmsService";
 
 const emptyForm = (): StaffAdminInput => ({
   full_name: "", email: "", role: "COUNSELLOR", job_title: "", department: "",
@@ -23,6 +24,8 @@ export function StaffManagement() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState("");
 
   const load = async () => { try { setError(""); setStaff(await StaffAdminService.list()); } catch (e) { setError(e instanceof Error ? e.message : "Staff could not be loaded"); } };
   useEffect(() => {
@@ -41,7 +44,7 @@ export function StaffManagement() {
   }, [permissionSearch]);
 
   const openWithRole = async (next: StaffAdminInput, member: StaffAdminRecord | null) => {
-    setEditing(member); setForm(next); setPermissionSearch(""); setOpen(true);
+    setEditing(member); setForm({...next,branch:"AECS Bagbazar Main Office"}); setPermissionSearch(""); setPhotoFile(null);setPhotoPreview("");setOpen(true);
     try { setRoleDefaults(await StaffAdminService.rolePermissions(next.role)); } catch { setRoleDefaults([]); }
   };
   const startCreate = () => void openWithRole(emptyForm(), null);
@@ -62,12 +65,17 @@ export function StaffManagement() {
       if (!form.full_name.trim() || !form.email.trim()) throw new Error("Full name and work email are required.");
       if (!editing && (!form.password || form.password.length < 10)) throw new Error("Temporary password must contain at least 10 characters.");
       if (!effective.length) throw new Error("Select at least one permission for this account.");
-      const payload = { ...form, desktop_modules: modulesForPermissions(effective) };
-      if (editing) await StaffAdminService.update(editing.id, payload); else await StaffAdminService.create(payload);
-      setOpen(false); setSuccess(editing ? "Staff identity and access updated successfully." : "Staff login created successfully."); await load();
+      const payload = { ...form, branch:"AECS Bagbazar Main Office", desktop_modules: modulesForPermissions(effective) };
+      let employeeId: string | undefined;
+      if (editing) { await StaffAdminService.update(editing.id, payload); employeeId=await StaffAdminService.employeeId(editing.id); }
+      else employeeId=(await StaffAdminService.create(payload)).employee_id;
+      let photoWarning="";
+      if(photoFile){try{if(!employeeId)throw new Error("HR employee record unavailable");await HrmsService.uploadStaffDocument(employeeId,"Profile Photo",photoFile)}catch{photoWarning=" The account was saved, but the profile picture could not be uploaded; add it later from the employee profile."}}
+      setOpen(false); setSuccess((editing ? "Staff identity and access updated successfully." : "Staff login created successfully.")+photoWarning); await load();
     } catch (e) { setError(e instanceof Error ? e.message : "Staff could not be saved"); }
     finally { setBusy(false); }
   };
+  const choosePhoto=(file?:File)=>{if(!file)return;if(!file.type.startsWith("image/")){setError("Choose a JPG, PNG, or WEBP staff photo.");return}if(file.size>5*1024*1024){setError("Staff profile pictures must be 5 MB or smaller.");return}setPhotoFile(file);const reader=new FileReader();reader.onload=()=>setPhotoPreview(String(reader.result??""));reader.readAsDataURL(file)};
   const changePassword = async () => {
     if (!passwordTarget) return;
     try { setBusy(true); setError(""); await StaffAdminService.setPassword(passwordTarget.id, newPassword); setPasswordTarget(null); setNewPassword(""); setSuccess("Temporary password reset successfully."); }
@@ -91,7 +99,8 @@ export function StaffManagement() {
       <header><div><span className="staff-access-icon"><UserCheck size={20}/></span><div><span className="staff-access-eyebrow">Administration</span><h2>{editing ? "Edit staff account" : "Create staff account"}</h2><p>Control identity and the exact CRM workspace available to this employee.</p></div></div><button onClick={() => setOpen(false)} aria-label="Close"><X size={18}/></button></header>
       <div className="staff-access-content">
         <section className="staff-access-section"><div className="staff-section-heading"><h3>Identity & employment</h3><p>Account details used throughout HRMS, assignments and audit records.</p></div>
-          <div className="staff-field-grid"><label>Full name *<input value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></label><label>Work email *<input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} disabled={Boolean(editing)}/></label><label>Phone<input value={form.phone ?? ""} onChange={e=>setForm({...form,phone:e.target.value})}/></label><label>Job title *<input value={form.job_title} onChange={e=>setForm({...form,job_title:e.target.value})}/></label><label>Department *<input value={form.department} onChange={e=>setForm({...form,department:e.target.value})}/></label><label>Branch *<input value={form.branch} onChange={e=>setForm({...form,branch:e.target.value})}/></label><label>Primary CRM role *<select value={form.role} onChange={e=>void changeRole(e.target.value as StaffRole)}>{STAFF_ROLES.map(role=><option key={role} value={role}>{roleName(role)}</option>)}</select></label><label>Sign out after inactivity<select value={form.inactivity_minutes} onChange={e=>setForm({...form,inactivity_minutes:Number(e.target.value)})}>{[5,15,30,60,120,480].map(minutes=><option key={minutes} value={minutes}>{minutes < 60 ? `${minutes} minutes` : `${minutes/60} hour${minutes===60?"":"s"}`}</option>)}</select></label>{!editing && <label>Temporary password *<input type="password" minLength={10} value={form.password ?? ""} onChange={e=>setForm({...form,password:e.target.value})}/><small>At least 10 characters.</small></label>}</div>
+          <div className="staff-photo-field"><label><span className="staff-photo-preview">{photoPreview?<img src={photoPreview} alt="New staff profile preview"/>:<UserCheck size={25}/>}<i><Camera size={12}/></i></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>choosePhoto(event.target.files?.[0])}/><strong>{photoFile?"Change profile picture":"Upload profile picture"}</strong><small>JPG, PNG or WEBP · maximum 5 MB</small></label><p>The photo is saved in the private HR vault and used in employee reports. You can also add it later.</p></div>
+          <div className="staff-field-grid"><label>Full name *<input value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></label><label>Work email *<input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} disabled={Boolean(editing)}/></label><label>Phone<input value={form.phone ?? ""} onChange={e=>setForm({...form,phone:e.target.value})}/></label><label>Job title *<input value={form.job_title} onChange={e=>setForm({...form,job_title:e.target.value})}/></label><label>Department *<input value={form.department} onChange={e=>setForm({...form,department:e.target.value})}/></label><label>Office branch<input value="AECS Bagbazar Main Office" readOnly disabled/><small>Single-office CRM — branch selection is intentionally locked.</small></label><label>Primary CRM role *<select value={form.role} onChange={e=>void changeRole(e.target.value as StaffRole)}>{STAFF_ROLES.map(role=><option key={role} value={role}>{roleName(role)}</option>)}</select></label><label>Sign out after inactivity<select value={form.inactivity_minutes} onChange={e=>setForm({...form,inactivity_minutes:Number(e.target.value)})}>{[5,15,30,60,120,480].map(minutes=><option key={minutes} value={minutes}>{minutes < 60 ? `${minutes} minutes` : `${minutes/60} hour${minutes===60?"":"s"}`}</option>)}</select></label>{!editing && <label>Temporary password *<input type="password" minLength={10} value={form.password ?? ""} onChange={e=>setForm({...form,password:e.target.value})}/><small>At least 10 characters.</small></label>}</div>
         </section>
         <section className="staff-access-section"><div className="staff-section-heading"><h3>Access policy</h3><p>Choose a role baseline or make every permission explicit.</p></div><div className="access-policy-grid">
           <button type="button" className={form.access_mode === "ROLE_PLUS" ? "active" : ""} onClick={()=>setForm({...form,access_mode:"ROLE_PLUS",permission_overrides:[]})}><span><Check size={14}/></span><strong>Role template + additions</strong><small>Role defaults remain active; add extra actions below.</small></button>

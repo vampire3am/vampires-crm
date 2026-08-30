@@ -19,9 +19,13 @@ export function WorkspaceReload({ duration = 3900 }: { duration?: number }) {
       <div className="workspace-reload-stage" aria-hidden="true">
         <div className="workspace-reload-wordmark" data-text="AECS CRM">AECS CRM</div>
         <div className="workspace-reload-counter">
-          <span>loading...</span>
-          <strong>{progress}</strong>
-          <span>%</span>
+          <div className="workspace-reload-counter-copy">
+            <span>Loading workspace</span>
+            <span className="workspace-reload-percentage"><strong>{progress}</strong>%</span>
+          </div>
+          <div className="workspace-reload-track">
+            <span style={{ width: `${progress}%` }} />
+          </div>
         </div>
       </div>
     </div>
