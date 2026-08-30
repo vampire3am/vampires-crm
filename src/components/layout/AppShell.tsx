@@ -433,7 +433,7 @@ export function AppShell() {
             )}
 
             {/* MESSAGES SECTION */}
-            <NavLink
+            {permissions.messages&&<NavLink
               to="/messages"
               className={({ isActive }) => (isActive || location.pathname.startsWith("/messages") ? "sidebar-link active" : "sidebar-link")}
             >
@@ -451,7 +451,7 @@ export function AppShell() {
                   {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
                 </span>
               )}
-            </NavLink>
+            </NavLink>}
 
             {/* EMAIL AUTOMATION & DRIP ENGINE */}
             <NavLink
@@ -759,7 +759,7 @@ export function AppShell() {
 
         {/* Dynamic Route Content */}
         <main id="main-content" className={`app-content ${supervisionOnly?"admin-supervision-mode":""}`} style={{ flex: 1 }} tabIndex={-1}>
-          {supervisionOnly&&<div className="admin-supervision-banner"><ShieldCheck size={16}/><div><strong>Admin oversight & HR authority</strong><span>You can assign staff work and fully manage HRMS. Other CRM modules remain supervision-only.</span></div></div>}
+          {supervisionOnly&&<div className="admin-supervision-banner"><ShieldCheck size={16}/><div><strong>Admin oversight with authorized operations</strong><span>You can manage staff access, internal messages, assignments, HRMS and accounting entries. Other CRM modules remain supervision-only.</span></div></div>}
           <Outlet />
         </main>
       </div>

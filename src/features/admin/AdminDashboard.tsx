@@ -34,8 +34,9 @@ interface LeavePolicyForm {
 }
 
 export function AdminDashboard() {
-  const {profile}=useAuth();
+  const {profile,hasPermission}=useAuth();
   const readOnly=profile?.role==="ADMIN";
+  const staffReadOnly=!hasPermission("rbac.manage");
   const initialTab = new URLSearchParams(location.search).get("tab");
   const [activeTab, setActiveTab] = useState<"org" | "branches" | "staff" | "roles" | "hrms" | "security">(initialTab === "roles" ? "roles" : initialTab === "staff" ? "staff" : initialTab === "hrms" ? "hrms" : "org");
   const [roleSearch, setRoleSearch] = useState<string>("");
@@ -79,7 +80,7 @@ export function AdminDashboard() {
   const permissionGroups=(permissions:string[])=>Object.entries(permissions.reduce<Record<string,string[]>>((groups,permission)=>{const module=permission.split(".")[0];(groups[module]??=[]).push(permission);return groups},{})).sort(([left],[right])=>left.localeCompare(right));
 
   return (
-    <div className={`page-container ${readOnly?"admin-settings-readonly":""}`}>
+    <div className={`page-container ${readOnly&&activeTab!=="staff"?"admin-settings-readonly":""}`}>
       {saveError&&<div className="alert-banner error" role="alert"><AlertTriangle size={16}/>{saveError}</div>}
       {/* Header Row */}
       <div className="page-header-row">
@@ -194,7 +195,7 @@ export function AdminDashboard() {
         </button>
       </div>
 
-      {activeTab === "staff" && <StaffManagement readOnly={readOnly} />}
+      {activeTab === "staff" && <StaffManagement readOnly={staffReadOnly} />}
 
       {activeTab === "hrms" && (
         <div className="crm-panel hrms-settings-panel">

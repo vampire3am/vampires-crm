@@ -63,7 +63,7 @@ const ROLE_PERMISSION_KEYS: RolePermissions = {
 const ALL_PERMISSIONS = Object.keys(ROLE_PERMISSION_KEYS) as Array<keyof RolePermissions>;
 
 export const ROLE_PERMISSIONS: Record<StaffRole, RolePermissions> = {
-  ADMIN: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "classes", "mocks", "documents", "finance", "reports", "hrms", "settings", "assignments"]),
+  ADMIN: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "classes", "mocks", "documents", "finance", "reports", "hrms", "settings", "messages", "assignments"]),
   HR_ADMIN: permissions(["dashboard", "hrms", "reports", "settings", "documents", "messages", "assignments"]),
   DIRECTOR: permissions(ALL_PERMISSIONS.filter(permission => permission !== "settings")),
   SENIOR_COUNSELLOR: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "documents", "messages", "assignments"]),

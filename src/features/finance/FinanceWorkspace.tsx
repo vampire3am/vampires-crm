@@ -47,6 +47,8 @@ import {
   numberToWords,
 } from "../../services/financeService";
 import { StudentService } from "../../services/studentService";
+import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
+import { useAuth } from "../auth/AuthProvider";
 
 type FinanceStudent = {
   id: string;
@@ -57,6 +59,8 @@ type FinanceStudent = {
 };
 
 export function FinanceWorkspace() {
+  const { hasPermission } = useAuth();
+  const canCreateFinance = hasPermission("finance.create");
   const [activeTab, setActiveTab] = useState<
     "billing" | "commissions" | "journals" | "trialbalance" | "coa"
   >("billing");
@@ -74,6 +78,19 @@ export function FinanceWorkspace() {
   const [activeVoucher, setActiveVoucher] = useState<JournalEntry | null>(null);
   const [previewJournal, setPreviewJournal] = useState<JournalEntry | null>(null);
   const [showJournalModal, setShowJournalModal] = useState(false);
+  const [savingJournal, setSavingJournal] = useState(false);
+  const [journalForm, setJournalForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    voucherType: "GENERAL",
+    referenceNo: "",
+    department: "General",
+    currency: "NPR",
+    narration: "",
+  });
+  const [journalLines, setJournalLines] = useState([
+    { accountCode: "", particulars: "", debit: 0, credit: 0 },
+    { accountCode: "", particulars: "", debit: 0, credit: 0 },
+  ]);
 
   // Filters & Search
   const [invoiceSearch, setInvoiceSearch] = useState("");
@@ -117,6 +134,11 @@ export function FinanceWorkspace() {
     StudentService.getStudents().then(data => {
       const financeStudents = (data || []) as FinanceStudent[];
       setStudents(financeStudents);
+      const first=financeStudents[0];
+      if(first){
+        setForm(current=>current.studentCode?current:{...current,studentCode:first.student_code,studentName:first.full_name,studentEmail:first.email??"",studentPhone:first.whatsapp});
+        setCommForm(current=>current.studentCode?current:{...current,studentCode:first.student_code,studentName:first.full_name});
+      }
     }).catch(error => setLoadError(error instanceof Error ? error.message : "Students could not be loaded"));
   }, []);
 
@@ -138,7 +160,10 @@ export function FinanceWorkspace() {
 
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
-    const created = await FinanceService.createInvoice({
+    const grandTotal=Number(form.subtotal)-Number(form.discount);
+    if(!form.studentCode)return notifyError("Select a registered student");
+    if(grandTotal<=0||form.amountReceived>grandTotal)return notifyError("Check the invoice and received amounts");
+    try{const created = await FinanceService.createInvoice({
       studentCode: form.studentCode,
       studentName: form.studentName,
       studentEmail: form.studentEmail,
@@ -156,6 +181,27 @@ export function FinanceWorkspace() {
     await loadData();
     setShowCreateModal(false);
     setActiveReceipt(created);
+    notifySuccess("Invoice posted","The invoice, receivable, receipt and journal entries are now in the ledger.");
+    }catch(error){notifyError(error instanceof Error?error.message:"Invoice could not be created")}
+  };
+
+  const postingAccounts=AECS_CHART_OF_ACCOUNTS.filter(account=>account.isPosting&&account.status==="Active");
+  const journalDebit=journalLines.reduce((sum,line)=>sum+Number(line.debit||0),0);
+  const journalCredit=journalLines.reduce((sum,line)=>sum+Number(line.credit||0),0);
+  const journalBalanced=journalDebit>0&&Math.abs(journalDebit-journalCredit)<0.005&&journalLines.length>=2&&journalLines.every(line=>line.accountCode&&(line.debit>0)!==(line.credit>0));
+  const updateJournalLine=(index:number,changes:Partial<(typeof journalLines)[number]>)=>setJournalLines(lines=>lines.map((line,lineIndex)=>lineIndex===index?{...line,...changes}:line));
+  const handlePostJournal=async(e:React.FormEvent)=>{
+    e.preventDefault();
+    if(!journalBalanced)return notifyError("Total debit and credit must be equal and every line must use a COA account.");
+    try{
+      setSavingJournal(true);
+      await FinanceService.postJournal({...journalForm,lines:journalLines});
+      await loadData();
+      setShowJournalModal(false);
+      setJournalLines([{accountCode:"",particulars:"",debit:0,credit:0},{accountCode:"",particulars:"",debit:0,credit:0}]);
+      setJournalForm(current=>({...current,referenceNo:"",narration:""}));
+      notifySuccess("Journal posted","The entry now flows through the ledger, trial balance and financial statements.");
+    }catch(error){notifyError(error instanceof Error?error.message:"Journal could not be posted")}finally{setSavingJournal(false)}
   };
 
   const handleCreateCommission = async (e: React.FormEvent) => {
@@ -222,21 +268,14 @@ export function FinanceWorkspace() {
   const totalCommissionsDue = commissions.filter(c => c.status === "PENDING").reduce((sum, c) => sum + c.commissionDueNpr, 0);
 
   // Dynamic Trial Balance & Financials Calculations
-  const incomeJournalsTotal = journals
-    .filter(j => j.creditAccountCode.startsWith("4"))
-    .reduce((sum, j) => sum + j.amount, 0);
-
-  const expenseJournalsTotal = journals
-    .filter(j => j.debitAccountCode.startsWith("5") || j.debitAccountCode.startsWith("6") || j.debitAccountCode.startsWith("7"))
-    .reduce((sum, j) => sum + j.amount, 0);
-
-  const assetJournalsTotal = journals
-    .filter(j => j.debitAccountCode.startsWith("1"))
-    .reduce((sum, j) => sum + j.amount, 0);
-
-  const liabilityJournalsTotal = journals
-    .filter(j => j.creditAccountCode.startsWith("2"))
-    .reduce((sum, j) => sum + j.amount, 0);
+  const postedLines=journals.flatMap(journal=>journal.lines);
+  const netForPrefix=(prefix:string,normal:"debit"|"credit")=>postedLines.filter(line=>line.accountCode.startsWith(prefix)).reduce((sum,line)=>sum+(normal==="debit"?line.debit-line.credit:line.credit-line.debit),0);
+  const incomeJournalsTotal = netForPrefix("4","credit");
+  const expenseJournalsTotal = ["5","6","7","8"].reduce((sum,prefix)=>sum+netForPrefix(prefix,"debit"),0);
+  const assetJournalsTotal = netForPrefix("1","debit");
+  const liabilityJournalsTotal = netForPrefix("2","credit");
+  const totalJournalDebits=postedLines.reduce((sum,line)=>sum+line.debit,0);
+  const totalJournalCredits=postedLines.reduce((sum,line)=>sum+line.credit,0);
 
   const netProfitTotal = incomeJournalsTotal - expenseJournalsTotal;
 
@@ -252,7 +291,7 @@ export function FinanceWorkspace() {
         <div className="page-header-titles">
           <h2>Finance, Invoicing & Chart of Accounts</h2>
           <p>
-            Every fee entry, payment receipt, and university commission automatically posts to the 454-account master ledger.
+            Every fee entry, receipt and approved journal posts into the live {AECS_CHART_OF_ACCOUNTS.length}-account master ledger.
           </p>
         </div>
         <div className="page-header-actions">
@@ -318,7 +357,7 @@ export function FinanceWorkspace() {
               <CreditCard size={17} />
             </div>
           </div>
-          <div className="metric-value">454 Accounts</div>
+          <div className="metric-value">{AECS_CHART_OF_ACCOUNTS.length} Accounts</div>
           <span className="metric-sub">1000–8000 Active Ledgers</span>
         </div>
       </div>
@@ -362,7 +401,7 @@ export function FinanceWorkspace() {
           onClick={() => setActiveTab("coa")}
         >
           <CreditCard size={16} />
-          <span>Master Chart of Accounts (454)</span>
+          <span>Master Chart of Accounts ({AECS_CHART_OF_ACCOUNTS.length})</span>
         </button>
       </div>
 
@@ -629,12 +668,12 @@ export function FinanceWorkspace() {
           <div className="panel-header-bar">
             <div>
               <h3>Double-Entry General Ledger Journals</h3>
-              <p>Automated journal vouchers posting Debit / Credit lines to the 454-account chart of accounts</p>
+              <p>Automated and staff-posted vouchers using the live {AECS_CHART_OF_ACCOUNTS.length}-account chart of accounts</p>
             </div>
-            <span className="status-pill">
-              <CheckCircle2 size={13} style={{ color: "var(--success)" }} />
-              <span>Real-Time Posting Active</span>
-            </span>
+            <div className="page-header-actions">
+              <span className="status-pill"><CheckCircle2 size={13} style={{ color: "var(--success)" }} /><span>Real-Time Posting Active</span></span>
+              {canCreateFinance&&<button type="button" className="btn-primary" onClick={()=>setShowJournalModal(true)}><Plus size={15}/><span>New Journal Entry</span></button>}
+            </div>
           </div>
 
           <div className="table-wrapper">
@@ -837,36 +876,36 @@ export function FinanceWorkspace() {
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", fontWeight: 700 }}>4.0</td>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", fontWeight: 700 }}>LIABILITIES</td>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>—</td>
-                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 15,20,000</td>
+                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 0</td>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>—</td>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {liabilityJournalsTotal.toLocaleString()}</td>
-                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right", fontWeight: 700 }}>₨ {(1520000 + liabilityJournalsTotal).toLocaleString()}</td>
+                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right", fontWeight: 700 }}>₨ {liabilityJournalsTotal.toLocaleString()}</td>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>—</td>
-                        <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>₨ {(1520000 + liabilityJournalsTotal).toLocaleString()}</td>
+                        <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>₨ {liabilityJournalsTotal.toLocaleString()}</td>
                       </tr>
 
                       <tr style={{ borderBottom: "1px solid #000000" }}>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", fontWeight: 700 }}>3.0</td>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", fontWeight: 700 }}>PROPERTY & ASSETS</td>
-                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 18,50,000</td>
+                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 0</td>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>—</td>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {assetJournalsTotal.toLocaleString()}</td>
                         <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>—</td>
-                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right", fontWeight: 700 }}>₨ {(1850000 + assetJournalsTotal).toLocaleString()}</td>
-                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right", fontWeight: 700 }}>₨ {(1850000 + assetJournalsTotal).toLocaleString()}</td>
+                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right", fontWeight: 700 }}>₨ {assetJournalsTotal.toLocaleString()}</td>
+                        <td style={{ padding: "6px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right", fontWeight: 700 }}>₨ {assetJournalsTotal.toLocaleString()}</td>
                         <td style={{ padding: "6px 10px", textAlign: "right" }}>—</td>
                       </tr>
 
                       <tr style={{ background: "#F1F5F9", fontWeight: 800 }}>
                         <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1" }}></td>
                         <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1" }}>Total</td>
-                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 22,70,000</td>
-                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 22,70,000</td>
-                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {(expenseJournalsTotal + assetJournalsTotal).toLocaleString()}</td>
-                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {(incomeJournalsTotal + liabilityJournalsTotal).toLocaleString()}</td>
+                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 0</td>
+                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 0</td>
+                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {totalJournalDebits.toLocaleString()}</td>
+                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {totalJournalCredits.toLocaleString()}</td>
                         <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>Balanced</td>
-                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {(2270000 + expenseJournalsTotal + assetJournalsTotal).toLocaleString()}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right" }}>₨ {(2270000 + incomeJournalsTotal + liabilityJournalsTotal).toLocaleString()}</td>
+                        <td style={{ padding: "8px 10px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {totalJournalDebits.toLocaleString()}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right" }}>₨ {totalJournalCredits.toLocaleString()}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -914,7 +953,7 @@ export function FinanceWorkspace() {
                       <tr style={{ background: "#F8FAFC", borderTop: "2px solid #000000", fontWeight: 900 }}>
                         <td style={{ padding: "10px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right", color: "#64748B" }}>0.00</td>
                         <td style={{ padding: "10px 12px", borderRight: "1px solid #CBD5E1", color: "#047857" }}>Net/Gross Profit</td>
-                        <td style={{ padding: "10px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 3,30,000</td>
+                        <td style={{ padding: "10px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 0</td>
                         <td style={{ padding: "10px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right", color: "#047857" }}>₨ {(incomeJournalsTotal - expenseJournalsTotal).toLocaleString()}</td>
                         <td style={{ padding: "10px 12px", textAlign: "right", color: "#047857", fontSize: "13.5px" }}>₨ {netProfitTotal.toLocaleString()}</td>
                       </tr>
@@ -948,17 +987,17 @@ export function FinanceWorkspace() {
                       <tr style={{ borderBottom: "1px solid #E2E8F0" }}>
                         <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right", color: "#64748B" }}>0.00</td>
                         <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", fontWeight: 800 }}>LIABILITIES</td>
-                        <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 15,20,000</td>
+                        <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 0</td>
                         <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {liabilityJournalsTotal.toLocaleString()}</td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 800 }}>₨ {(1520000 + liabilityJournalsTotal).toLocaleString()}</td>
+                        <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 800 }}>₨ {liabilityJournalsTotal.toLocaleString()}</td>
                       </tr>
 
                       <tr style={{ borderBottom: "1px solid #000000" }}>
                         <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right", color: "#64748B" }}>0.00</td>
                         <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", fontWeight: 800 }}>PROPERTY & ASSETS</td>
-                        <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 18,50,000</td>
+                        <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ 0</td>
                         <td style={{ padding: "8px 12px", borderRight: "1px solid #CBD5E1", textAlign: "right" }}>₨ {assetJournalsTotal.toLocaleString()}</td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 800 }}>₨ {(1850000 + assetJournalsTotal).toLocaleString()}</td>
+                        <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 800 }}>₨ {assetJournalsTotal.toLocaleString()}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1134,6 +1173,47 @@ export function FinanceWorkspace() {
         </div>
       )}
 
+      {/* COA-DRIVEN MANUAL JOURNAL */}
+      {showJournalModal&&(
+        <div className="modal-backdrop-clean" onClick={()=>setShowJournalModal(false)}>
+          <div className="modal-dialog-clean" style={{maxWidth:"1060px"}} onClick={event=>event.stopPropagation()}>
+            <div className="modal-header-clean">
+              <div><h3>Post Journal Entry</h3><p style={{fontSize:"11.5px",color:"var(--text-muted)"}}>Every line is selected from the live Chart of Accounts and posts immediately to the ledger and statements.</p></div>
+              <button type="button" className="drawer-close-btn" onClick={()=>setShowJournalModal(false)}><X size={18}/></button>
+            </div>
+            <form onSubmit={handlePostJournal}>
+              <div className="modal-body-clean">
+                <div className="form-row-2">
+                  <div className="form-group"><label>Voucher date *</label><input type="date" required value={journalForm.date} onChange={event=>setJournalForm({...journalForm,date:event.target.value})}/></div>
+                  <div className="form-group"><label>Voucher type *</label><select value={journalForm.voucherType} onChange={event=>setJournalForm({...journalForm,voucherType:event.target.value})}><option>GENERAL</option><option>PAYMENT</option><option>RECEIPT</option><option>CONTRA</option><option>ADJUSTMENT</option></select></div>
+                </div>
+                <div className="form-row-2">
+                  <div className="form-group"><label>Reference number</label><input value={journalForm.referenceNo} onChange={event=>setJournalForm({...journalForm,referenceNo:event.target.value})} placeholder="Invoice, bill or document reference"/></div>
+                  <div className="form-group"><label>Department</label><input value={journalForm.department} onChange={event=>setJournalForm({...journalForm,department:event.target.value})} placeholder="General / HR / Student Services"/></div>
+                </div>
+                <div className="form-group"><label>Narration *</label><textarea required rows={2} value={journalForm.narration} onChange={event=>setJournalForm({...journalForm,narration:event.target.value})} placeholder="Describe the business purpose and supporting document"/></div>
+                <div className="table-wrapper" style={{marginTop:14}}>
+                  <table className="crm-table">
+                    <thead><tr><th style={{width:42}}>S.N.</th><th>COA account *</th><th>Particulars</th><th style={{width:140}}>Debit (NPR)</th><th style={{width:140}}>Credit (NPR)</th><th style={{width:50}}></th></tr></thead>
+                    <tbody>{journalLines.map((line,index)=><tr key={index}>
+                      <td>{index+1}</td>
+                      <td><select required value={line.accountCode} onChange={event=>updateJournalLine(index,{accountCode:event.target.value})}><option value="">Select posting account…</option>{postingAccounts.map(account=><option key={account.code} value={account.code}>{account.code} — {account.name}</option>)}</select></td>
+                      <td><input value={line.particulars} onChange={event=>updateJournalLine(index,{particulars:event.target.value})} placeholder={journalForm.narration||"Line description"}/></td>
+                      <td><input type="number" min="0" step="0.01" value={line.debit||""} onChange={event=>updateJournalLine(index,{debit:Number(event.target.value),credit:0})}/></td>
+                      <td><input type="number" min="0" step="0.01" value={line.credit||""} onChange={event=>updateJournalLine(index,{credit:Number(event.target.value),debit:0})}/></td>
+                      <td><button type="button" className="drawer-close-btn" disabled={journalLines.length<=2} onClick={()=>setJournalLines(lines=>lines.filter((_,lineIndex)=>lineIndex!==index))}><X size={15}/></button></td>
+                    </tr>)}</tbody>
+                    <tfoot><tr><td colSpan={3}><button type="button" className="btn-secondary" onClick={()=>setJournalLines(lines=>[...lines,{accountCode:"",particulars:"",debit:0,credit:0}])}><Plus size={14}/> Add line</button></td><td><strong>₨ {journalDebit.toLocaleString()}</strong></td><td><strong>₨ {journalCredit.toLocaleString()}</strong></td><td></td></tr></tfoot>
+                  </table>
+                </div>
+                <div className={journalBalanced?"alert-banner success":"alert-banner error"} style={{marginTop:12}}>{journalBalanced?<><CheckCircle2 size={16}/>Balanced journal — ready to post.</>:<><AlertTriangle size={16}/>Difference: ₨ {Math.abs(journalDebit-journalCredit).toLocaleString()} · Debits and credits must match.</>}</div>
+              </div>
+              <div className="modal-footer-clean"><button type="button" className="btn-secondary" onClick={()=>setShowJournalModal(false)}>Cancel</button><button type="submit" className="btn-primary" disabled={!journalBalanced||savingJournal}><FileCheck2 size={15}/>{savingJournal?"Posting…":"Post Journal"}</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* CREATE STUDENT INVOICE & RECEIPT MODAL */}
       {showCreateModal && (
         <div className="modal-backdrop-clean" onClick={() => setShowCreateModal(false)}>
@@ -1161,26 +1241,20 @@ export function FinanceWorkspace() {
                     <label>Select Student Candidate *</label>
                     {students.length > 0 ? (
                       <select
-                        value={`${form.studentCode}|${form.studentName}|${form.studentEmail}|${form.studentPhone}`}
+                        value={form.studentCode}
                         onChange={e => {
-                          const [code, name, email, phone] = e.target.value.split("|");
-                          setForm({ ...form, studentCode: code, studentName: name, studentEmail: email, studentPhone: phone });
+                          const selected=students.find(student=>student.student_code===e.target.value);
+                          if(selected)setForm({ ...form, studentCode:selected.student_code,studentName:selected.full_name,studentEmail:selected.email??"",studentPhone:selected.whatsapp});
                         }}
                       >
                         {students.map(s => (
-                          <option key={s.id} value={`${s.student_code}|${s.full_name}|${s.email ?? ""}|${s.whatsapp}`}>
+                          <option key={s.id} value={s.student_code}>
                             {s.full_name} ({s.student_code})
                           </option>
                         ))}
                       </select>
                     ) : (
-                      <input
-                        type="text"
-                        required
-                        value={form.studentName}
-                        onChange={e => setForm({ ...form, studentName: e.target.value, studentCode: form.studentCode || "AECS-2026-00001" })}
-                        placeholder="Candidate Full Name"
-                      />
+                      <input disabled value="" placeholder="No registered students available"/>
                     )}
                   </div>
 
@@ -1222,10 +1296,10 @@ export function FinanceWorkspace() {
                       value={form.paymentMethod}
                       onChange={e => setForm({ ...form, paymentMethod: e.target.value })}
                     >
-                      <option value="eSewa Digital Wallet">eSewa Digital Wallet (Dr 1115)</option>
-                      <option value="Khalti Digital Wallet">Khalti Digital Wallet (Dr 1115)</option>
-                      <option value="Direct Bank Transfer (Nabil Bank)">Direct Bank Transfer - Nabil Bank (Dr 1113)</option>
-                      <option value="ConnectIPS / NPI">ConnectIPS / NPI (Dr 1113)</option>
+                      <option value="eSewa Digital Wallet">eSewa Digital Wallet (Dr 1125)</option>
+                      <option value="Khalti Digital Wallet">Khalti Digital Wallet (Dr 1126)</option>
+                      <option value="Direct Bank Transfer (Nabil Bank)">Direct Bank Transfer - Nabil Bank (Dr 1121)</option>
+                      <option value="ConnectIPS / NPI">ConnectIPS / NPI (Dr 1121)</option>
                       <option value="Cash Counter (Kathmandu Office)">Cash Counter (Dr 1111)</option>
                     </select>
                   </div>
@@ -1271,14 +1345,7 @@ export function FinanceWorkspace() {
 
                   <div className="form-group">
                     <label>Payment Status</label>
-                    <select
-                      value={form.status}
-                      onChange={e => setForm({ ...form, status: e.target.value as typeof form.status })}
-                    >
-                      <option value="PAID">PAID (Full Settlement)</option>
-                      <option value="PARTIAL">PARTIAL (Advance Paid)</option>
-                      <option value="PENDING">PENDING (Unpaid)</option>
-                    </select>
+                    <input readOnly value={form.amountReceived<=0?"PENDING (Unpaid)":form.amountReceived>=form.subtotal-form.discount?"PAID (Full Settlement)":"PARTIAL (Advance Paid)"}/>
                   </div>
                 </div>
               </div>
@@ -1291,7 +1358,7 @@ export function FinanceWorkspace() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
+                <button type="submit" className="btn-primary" disabled={!students.length||!form.studentCode}>
                   <Receipt size={15} />
                   <span>Generate Invoice & Post Journal</span>
                 </button>
@@ -1625,12 +1692,12 @@ export function FinanceWorkspace() {
                 <div style={{ border: "1.5px solid #000000", borderRadius: "8px", padding: "10px 14px", fontSize: "12px", lineHeight: "1.8" }}>
                   <div>Date : <strong>{activeVoucher.date}</strong></div>
                   <div>Voucher No : <strong>{activeVoucher.voucherNo}</strong></div>
-                  <div>Department : <strong>Finance & Accounts</strong></div>
+                  <div>Department : <strong>{activeVoucher.department}</strong></div>
                 </div>
 
                 <div style={{ border: "1.5px solid #000000", borderRadius: "8px", padding: "10px 14px", fontSize: "12px", lineHeight: "1.8" }}>
-                  <div>Voucher Type : <strong>General Journal</strong></div>
-                  <div>Currency : <strong>NPR (Nepalese Rupee)</strong></div>
+                  <div>Voucher Type : <strong>{activeVoucher.voucherType}</strong></div>
+                  <div>Currency : <strong>{activeVoucher.currency}</strong></div>
                   <div>Status : <strong>{activeVoucher.status}</strong></div>
                 </div>
               </div>
@@ -1652,45 +1719,19 @@ export function FinanceWorkspace() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Line 1: Debit Line */}
-                    <tr style={{ borderBottom: "1px solid #CBD5E1" }}>
-                      <td style={{ padding: "8px", borderRight: "1px solid #000000", textAlign: "center" }}>1</td>
-                      <td style={{ padding: "8px", borderRight: "1px solid #000000", textAlign: "center", fontWeight: 700 }}>{activeVoucher.debitAccountCode}</td>
-                      <td style={{ padding: "8px", borderRight: "1px solid #000000", fontWeight: 600 }}>{activeVoucher.debitAccountName} (DR)</td>
-                      <td style={{ padding: "8px", borderRight: "1px solid #000000", textAlign: "right", fontWeight: 700 }}>₨ {activeVoucher.amount.toLocaleString()}</td>
-                      <td style={{ padding: "8px", textAlign: "right" }}>—</td>
-                    </tr>
-
-                    {/* Line 2: Credit Line */}
-                    <tr style={{ borderBottom: "1px solid #CBD5E1" }}>
-                      <td style={{ padding: "8px", borderRight: "1px solid #000000", textAlign: "center" }}>2</td>
-                      <td style={{ padding: "8px", borderRight: "1px solid #000000", textAlign: "center", fontWeight: 700 }}>{activeVoucher.creditAccountCode}</td>
-                      <td style={{ padding: "8px", borderRight: "1px solid #000000", paddingLeft: "24px" }}>To {activeVoucher.creditAccountName} (CR)</td>
-                      <td style={{ padding: "8px", borderRight: "1px solid #000000", textAlign: "right" }}>—</td>
-                      <td style={{ padding: "8px", textAlign: "right", fontWeight: 700 }}>₨ {activeVoucher.amount.toLocaleString()}</td>
-                    </tr>
-
-                    {/* Empty Lines 3 & 4 matching template */}
-                    <tr style={{ borderBottom: "1px solid #CBD5E1", height: "26px" }}>
-                      <td style={{ borderRight: "1px solid #000000", textAlign: "center" }}>3</td>
-                      <td style={{ borderRight: "1px solid #000000" }}></td>
-                      <td style={{ borderRight: "1px solid #000000" }}></td>
-                      <td style={{ borderRight: "1px solid #000000" }}></td>
-                      <td></td>
-                    </tr>
-                    <tr style={{ borderBottom: "1px solid #000000", height: "26px" }}>
-                      <td style={{ borderRight: "1px solid #000000", textAlign: "center" }}>4</td>
-                      <td style={{ borderRight: "1px solid #000000" }}></td>
-                      <td style={{ borderRight: "1px solid #000000" }}></td>
-                      <td style={{ borderRight: "1px solid #000000" }}></td>
-                      <td></td>
-                    </tr>
+                    {activeVoucher.lines.map((line,index)=><tr key={index} style={{borderBottom:"1px solid #CBD5E1"}}>
+                      <td style={{padding:"8px",borderRight:"1px solid #000000",textAlign:"center"}}>{index+1}</td>
+                      <td style={{padding:"8px",borderRight:"1px solid #000000",textAlign:"center",fontWeight:700}}>{line.accountCode}</td>
+                      <td style={{padding:"8px",borderRight:"1px solid #000000",paddingLeft:line.credit?"24px":"8px"}}>{line.credit?"To ":""}{line.accountName}<small style={{display:"block",color:"#64748B"}}>{line.particulars}</small></td>
+                      <td style={{padding:"8px",borderRight:"1px solid #000000",textAlign:"right",fontWeight:line.debit?700:400}}>{line.debit?`₨ ${line.debit.toLocaleString()}`:"—"}</td>
+                      <td style={{padding:"8px",textAlign:"right",fontWeight:line.credit?700:400}}>{line.credit?`₨ ${line.credit.toLocaleString()}`:"—"}</td>
+                    </tr>)}
 
                     {/* Total Row */}
                     <tr style={{ background: "#CBD5E1", fontWeight: 900 }}>
                       <td colSpan={3} style={{ padding: "8px 12px", borderRight: "1px solid #000000", textAlign: "right" }}>Total</td>
-                      <td style={{ padding: "8px", borderRight: "1px solid #000000", textAlign: "right" }}>₨ {activeVoucher.amount.toLocaleString()}</td>
-                      <td style={{ padding: "8px", textAlign: "right" }}>₨ {activeVoucher.amount.toLocaleString()}</td>
+                      <td style={{ padding: "8px", borderRight: "1px solid #000000", textAlign: "right" }}>₨ {activeVoucher.lines.reduce((sum,line)=>sum+line.debit,0).toLocaleString()}</td>
+                      <td style={{ padding: "8px", textAlign: "right" }}>₨ {activeVoucher.lines.reduce((sum,line)=>sum+line.credit,0).toLocaleString()}</td>
                     </tr>
                   </tbody>
                 </table>

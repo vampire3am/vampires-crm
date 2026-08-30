@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node tests/phase1-security.test.mjs && node tests/phase2-leads.test.mjs && node tests/phase3-cases.test.mjs && node tests/phase4-documents.test.mjs && node tests/phase5-classes.test.mjs && node tests/phase6-finance.test.mjs && node tests/phase7-hrms.test.mjs && node tests/phase8-communications.test.mjs && node tests/phase9-reporting-admin.test.mjs && node tests/phase10-hardening.test.mjs && node tests/phase11-assignments.test.mjs",
+    "test": "node tests/phase1-security.test.mjs && node tests/phase2-leads.test.mjs && node tests/phase3-cases.test.mjs && node tests/phase4-documents.test.mjs && node tests/phase5-classes.test.mjs && node tests/phase6-finance.test.mjs && node tests/phase7-hrms.test.mjs && node tests/phase8-communications.test.mjs && node tests/phase9-reporting-admin.test.mjs && node tests/phase10-hardening.test.mjs && node tests/phase11-assignments.test.mjs && node tests/phase12-accounting-authority.test.mjs",
     "validate": "npm test && tsc -b --pretty false && vite build"
   },
   "dependencies": {
