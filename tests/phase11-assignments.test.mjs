@@ -1,0 +1,29 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read=path=>readFileSync(new URL(`../${path}`,import.meta.url),"utf8");
+const migration=read("supabase/migrations/202608300003_staff_assignments_workspace.sql");
+const supervision=read("supabase/migrations/202608300002_admin_supervision_only.sql");
+const workspace=read("src/features/assignments/AssignmentsWorkspace.tsx");
+const shell=read("src/components/layout/AppShell.tsx");
+const routes=read("src/app/App.tsx");
+const dashboard=read("src/features/dashboard/ManagementDashboard.tsx");
+const hrms=read("src/features/hrms/HrmsWorkspace.tsx");
+
+assert.match(migration,/create table if not exists public\.staff_assignments/);
+assert.match(migration,/create_staff_assignment/);
+assert.match(migration,/submit_staff_assignment/);
+assert.match(migration,/review_staff_assignment/);
+assert.match(migration,/current_staff_role\(\)='ADMIN'.*cannot review assignments/s);
+assert.match(supervision,/prevent_admin_operational_mutation/);
+assert.match(supervision,/ADMIN is a supervision-only role/);
+assert.match(workspace,/Create staff assignment/);
+assert.match(workspace,/Completion report/);
+assert.match(workspace,/Request revision/);
+assert.match(workspace,/roleTemplates/);
+assert.match(shell,/to="\/assignments"/);
+assert.match(routes,/path="\/assignments"/);
+assert.match(dashboard,/canUseAttendance && <section className="dashboard-attendance-card"/);
+assert.match(hrms,/profile\?\.role!=="ADMIN"&&<>/);
+
+console.log("phase11 assignments and admin supervision checks passed");

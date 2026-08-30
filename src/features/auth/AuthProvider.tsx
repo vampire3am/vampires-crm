@@ -33,6 +33,7 @@ export interface RolePermissions {
   hrms: boolean;
   settings: boolean;
   messages: boolean;
+  assignments: boolean;
 }
 
 const permissions = (
@@ -56,25 +57,26 @@ const ROLE_PERMISSION_KEYS: RolePermissions = {
   hrms: false,
   settings: false,
   messages: false,
+  assignments: false,
 };
 
 const ALL_PERMISSIONS = Object.keys(ROLE_PERMISSION_KEYS) as Array<keyof RolePermissions>;
 
 export const ROLE_PERMISSIONS: Record<StaffRole, RolePermissions> = {
-  ADMIN: permissions(ALL_PERMISSIONS),
-  HR_ADMIN: permissions(["dashboard", "hrms", "reports", "settings", "documents", "messages"]),
+  ADMIN: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "classes", "mocks", "documents", "finance", "reports", "hrms", "settings", "assignments"]),
+  HR_ADMIN: permissions(["dashboard", "hrms", "reports", "settings", "documents", "messages", "assignments"]),
   DIRECTOR: permissions(ALL_PERMISSIONS.filter(permission => permission !== "settings")),
-  SENIOR_COUNSELLOR: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "documents", "messages"]),
-  COUNSELLOR: permissions(["dashboard", "leads", "students", "counselling", "applications", "documents", "messages"]),
-  VISA_OFFICER: permissions(["dashboard", "students", "applications", "documents", "messages"]),
-  ACCOUNTANT: permissions(["dashboard", "students", "b2b", "finance", "reports", "messages"]),
-  FRONT_DESK: permissions(["dashboard", "leads", "students", "classes", "mocks", "messages"]),
-  FACULTY: permissions(["dashboard", "students", "classes", "mocks", "messages"]),
-  MARKETING: permissions(["dashboard", "leads", "students", "b2b", "reports", "messages"]),
-  IT_ADMIN: permissions(["dashboard", "documents", "hrms", "settings", "messages"]),
-  DOCUMENTATION: permissions(["dashboard", "students", "applications", "documents", "messages"]),
-  FINANCE: permissions(["dashboard", "students", "b2b", "finance", "reports", "messages"]),
-  TEST_BOOKING: permissions(["dashboard", "students", "classes", "mocks", "messages"]),
+  SENIOR_COUNSELLOR: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "documents", "messages", "assignments"]),
+  COUNSELLOR: permissions(["dashboard", "leads", "students", "counselling", "applications", "documents", "messages", "assignments"]),
+  VISA_OFFICER: permissions(["dashboard", "students", "applications", "documents", "messages", "assignments"]),
+  ACCOUNTANT: permissions(["dashboard", "students", "b2b", "finance", "reports", "messages", "assignments"]),
+  FRONT_DESK: permissions(["dashboard", "leads", "students", "classes", "mocks", "messages", "assignments"]),
+  FACULTY: permissions(["dashboard", "students", "classes", "mocks", "messages", "assignments"]),
+  MARKETING: permissions(["dashboard", "leads", "students", "b2b", "reports", "messages", "assignments"]),
+  IT_ADMIN: permissions(["dashboard", "documents", "hrms", "settings", "messages", "assignments"]),
+  DOCUMENTATION: permissions(["dashboard", "students", "applications", "documents", "messages", "assignments"]),
+  FINANCE: permissions(["dashboard", "students", "b2b", "finance", "reports", "messages", "assignments"]),
+  TEST_BOOKING: permissions(["dashboard", "students", "classes", "mocks", "messages", "assignments"]),
 };
 
 export interface StaffProfile {

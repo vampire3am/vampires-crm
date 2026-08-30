@@ -26,6 +26,12 @@ export const STAFF_PERMISSION_GROUPS: PermissionGroup[] = [
     { key: "applications.manage", label: "Manage application operations" },
     { key: "case_tasks.view", label: "View case tasks" }, { key: "case_tasks.edit", label: "Create and manage case tasks" },
   ]},
+  { id: "assignments", label: "Staff assignments", module: "assignments", permissions: [
+    { key: "assignments.view", label: "View authorized staff assignments" },
+    { key: "assignments.assign", label: "Assign custom work to staff" },
+    { key: "assignments.submit", label: "Update progress and submit completion reports" },
+    { key: "assignments.review", label: "Review submissions and request revisions" },
+  ]},
   { id: "abroad", label: "Abroad & counselling", module: "counselling", permissions: [
     { key: "counselling.view", label: "View destinations and consultation records" },
     { key: "counselling.edit", label: "Manage destinations, universities and consultations" },

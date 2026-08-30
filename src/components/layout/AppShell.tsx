@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  ClipboardCheck,
   CreditCard,
   FileCheck2,
   FileText,
@@ -59,6 +60,7 @@ const SEARCH_ITEMS = [
   { label: "Team Messages Hub", detail: "Private staff messaging, channels & calling", to: "/messages", icon: MessageSquare },
   { label: "Email Automation & Drips", detail: "Automated student lifecycle notifications & intake auto-responders", to: "/email-automation", icon: Mail },
   { label: "Live CRM Reports", detail: "Generate reports from current operational records", to: "/analytics", icon: BarChart3 },
+  { label: "Staff Assignments", detail: "Role-aware tasks, progress, completion reports and reviews", to: "/assignments", icon: ClipboardCheck },
   { label: "Users & RBAC Permissions", detail: "Active role permissions and maker-checker controls", to: "/settings?tab=roles", icon: ShieldCheck },
   { label: "Settings & ERP Blueprint", detail: "Organization, branches, and statutory profile", to: "/settings", icon: Settings },
 ];
@@ -79,6 +81,7 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, permissions, signOut } = useAuth();
+  const supervisionOnly = profile?.role === "ADMIN";
   const currentStaffId = profile?.id ?? "pending-session";
   const unreadNotifications=notifications.filter(item=>!item.readAt).length;
 
@@ -133,6 +136,7 @@ export function AppShell() {
     if (location.pathname.startsWith("/messages")) return "Team Messages & Collaboration Hub";
     if (location.pathname.startsWith("/email-automation")) return "Email Automation & Drip Campaigns";
     if (location.pathname.startsWith("/analytics")) return "Live CRM Reports & Analytics";
+    if (location.pathname.startsWith("/assignments")) return "Staff Assignments & Completion Reports";
     if (location.pathname.startsWith("/settings")) return "System Settings & RBAC";
     return "Operations Workspace";
   }, [location.pathname]);
@@ -339,6 +343,18 @@ export function AppShell() {
               </NavLink>
             )}
 
+            {permissions.assignments && (
+              <NavLink
+                to="/assignments"
+                className={({ isActive }) => (isActive ? "sidebar-link active" : "sidebar-link")}
+              >
+                <div className="sidebar-link-content">
+                  <ClipboardCheck size={16} />
+                  <span>Assignments</span>
+                </div>
+              </NavLink>
+            )}
+
             {/* COLLAPSIBLE HRMS GROUP (ONLY AUTHORIZED ROLES) */}
             {permissions.hrms && (
               <div style={{ marginTop: "2px" }}>
@@ -416,7 +432,7 @@ export function AppShell() {
               </div>
             )}
 
-            {/* MESSAGES SECTION (ALL 18 STAFF CAN COLLABORATE) */}
+            {/* MESSAGES SECTION */}
             <NavLink
               to="/messages"
               className={({ isActive }) => (isActive || location.pathname.startsWith("/messages") ? "sidebar-link active" : "sidebar-link")}
@@ -742,7 +758,8 @@ export function AppShell() {
         <IncomingCallToast />
 
         {/* Dynamic Route Content */}
-        <main id="main-content" className="app-content" style={{ flex: 1 }} tabIndex={-1}>
+        <main id="main-content" className={`app-content ${supervisionOnly?"admin-supervision-mode":""}`} style={{ flex: 1 }} tabIndex={-1}>
+          {supervisionOnly&&<div className="admin-supervision-banner"><ShieldCheck size={16}/><div><strong>Supervision-only access</strong><span>You can review CRM operations and reports. Creating, editing, approving, deleting, uploading, and configuration changes are blocked.</span></div></div>}
           <Outlet />
         </main>
       </div>

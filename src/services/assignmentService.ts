@@ -1,0 +1,20 @@
+import { supabase } from "../lib/supabase";
+
+export type AssignmentStatus="ASSIGNED"|"IN_PROGRESS"|"SUBMITTED"|"REVISION_REQUIRED"|"COMPLETED"|"CANCELLED";
+export type AssignmentPriority="LOW"|"MEDIUM"|"HIGH"|"URGENT";
+export interface AssignmentPerson{id:string;fullName:string;role:string;department:string;jobTitle:string}
+export interface StaffAssignment{id:string;code:string;title:string;description:string;category:string;deliverables:string;priority:AssignmentPriority;status:AssignmentStatus;dueAt:string;assignedTo:string;assignedBy:string;assigneeRole:string;progress:number;completionReport:string;evidenceLinks:string[];submittedAt:string|null;reviewerNotes:string;completedAt:string|null;createdAt:string;assignee:AssignmentPerson;assigner:AssignmentPerson;reviewer:AssignmentPerson|null}
+
+type AssignmentRow=Record<string,unknown>;
+const person=(value:unknown):AssignmentPerson=>{const row=(value??{}) as AssignmentRow;return{id:String(row.id??""),fullName:String(row.full_name??"Unknown staff"),role:String(row.role??"STAFF"),department:String(row.department??"Unassigned"),jobTitle:String(row.job_title??"Staff member")}};
+const mapAssignment=(value:unknown):StaffAssignment=>{const row=value as AssignmentRow;return{id:String(row.id),code:String(row.assignment_code),title:String(row.title),description:String(row.description),category:String(row.category),deliverables:String(row.deliverables??""),priority:row.priority as AssignmentPriority,status:row.status as AssignmentStatus,dueAt:String(row.due_at),assignedTo:String(row.assigned_to),assignedBy:String(row.assigned_by),assigneeRole:String(row.assignee_role),progress:Number(row.progress??0),completionReport:String(row.completion_report??""),evidenceLinks:Array.isArray(row.evidence_links)?row.evidence_links.map(String):[],submittedAt:row.submitted_at?String(row.submitted_at):null,reviewerNotes:String(row.reviewer_notes??""),completedAt:row.completed_at?String(row.completed_at):null,createdAt:String(row.created_at),assignee:person(row.assignee),assigner:person(row.assigner),reviewer:row.reviewer?person(row.reviewer):null}};
+
+export const AssignmentService={
+  async list(){const{data,error}=await supabase.from("staff_assignments").select("*,assignee:staff_profiles!staff_assignments_assigned_to_fkey(id,full_name,role,department,job_title),assigner:staff_profiles!staff_assignments_assigned_by_fkey(id,full_name,role,department,job_title),reviewer:staff_profiles!staff_assignments_reviewed_by_fkey(id,full_name,role,department,job_title)").order("created_at",{ascending:false});if(error)throw error;return(data??[]).map(mapAssignment)},
+  async listStaff(){const{data,error}=await supabase.from("staff_profiles").select("id,full_name,role,department,job_title").eq("is_active",true).neq("role","ADMIN").order("full_name");if(error)throw error;return(data??[]).map(person)},
+  async create(payload:{assignedTo:string;title:string;description:string;category:string;deliverables:string;priority:AssignmentPriority;dueAt:string}){const{error}=await supabase.rpc("create_staff_assignment",{payload:{assigned_to:payload.assignedTo,title:payload.title,description:payload.description,category:payload.category,deliverables:payload.deliverables,priority:payload.priority,due_at:payload.dueAt}});if(error)throw error},
+  async progress(id:string,value:number){const{error}=await supabase.rpc("update_my_assignment_progress",{assignment_uuid:id,next_progress:value});if(error)throw error},
+  async submit(id:string,report:string,links:string[]){const{error}=await supabase.rpc("submit_staff_assignment",{assignment_uuid:id,report_text:report,evidence:links});if(error)throw error},
+  async review(id:string,decision:"COMPLETED"|"REVISION_REQUIRED",note:string){const{error}=await supabase.rpc("review_staff_assignment",{assignment_uuid:id,decision,review_note:note});if(error)throw error},
+  subscribe(onChange:()=>void){const channel=supabase.channel(`assignments-${crypto.randomUUID()}`).on("postgres_changes",{event:"*",schema:"public",table:"staff_assignments"},onChange).subscribe();return()=>{void supabase.removeChannel(channel)}}
+};

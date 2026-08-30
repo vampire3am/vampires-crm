@@ -454,6 +454,7 @@ export function HrmsWorkspace() {
         </div>
 
         <div className="page-header-actions">
+          {profile?.role!=="ADMIN"&&<>
           <button
             type="button"
             className="btn-secondary"
@@ -468,6 +469,7 @@ export function HrmsWorkspace() {
             {clockOutSuccess ? <Check size={15} style={{ color: "var(--success)" }} /> : <Clock size={15} />}
             <span>{clockOutSuccess ? "Clocked Out Successfully!" : myAttendance?.clockOut ? "Shift Completed" : "Web Clock-Out"}</span>
           </button>
+          </>}
 
           {canManageHr&&<button
             type="button"

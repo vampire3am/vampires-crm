@@ -12,7 +12,7 @@ const emptyForm = (): StaffAdminInput => ({
 });
 const roleName = (role: StaffRole) => role.replaceAll("_", " ").replace(/\b\w/g, value => value.toUpperCase());
 
-export function StaffManagement() {
+export function StaffManagement({readOnly=false}:{readOnly?:boolean}) {
   const [staff, setStaff] = useState<StaffAdminRecord[]>([]);
   const [form, setForm] = useState<StaffAdminInput>(emptyForm);
   const [roleDefaults, setRoleDefaults] = useState<string[]>([]);
@@ -87,10 +87,10 @@ export function StaffManagement() {
     {error && <div className="alert-banner error" role="alert">{error}</div>}
     {success && <div className="staff-success" role="status">{success}</div>}
     <div className="crm-panel">
-      <div className="panel-header-bar"><div><h3>Staff accounts & access control</h3><p>Manage staff identity, exact operational permissions, and account security.</p></div><button type="button" className="btn-primary" onClick={startCreate}><Plus size={15}/>Add staff</button></div>
+      <div className="panel-header-bar"><div><h3>Staff accounts & access control</h3><p>{readOnly?"Supervision view of staff identity, workspaces, and account status.":"Manage staff identity, exact operational permissions, and account security."}</p></div>{!readOnly&&<button type="button" className="btn-primary" onClick={startCreate}><Plus size={15}/>Add staff</button>}</div>
       <div className="staff-access-summary"><span><strong>{activeCount}</strong> active accounts</span><span><strong>{staff.length}</strong> total accounts</span><span><ShieldCheck size={14}/><strong>Action-level</strong> authorization</span></div>
       <div className="table-wrapper"><table className="crm-table"><thead><tr><th>Staff member</th><th>Role & branch</th><th>Access policy</th><th>Effective access</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-        {staff.map(member => <tr key={member.id}><td><strong>{member.full_name}</strong><small>{member.email}</small></td><td><strong>{member.job_title}</strong><small>{roleName(member.role)} · {member.branch}</small></td><td><span className="access-mode-pill">{member.access_mode === "EXACT" ? "Exact custom" : "Role + additions"}</span><small>{member.inactivity_minutes} min inactivity sign-out</small></td><td><strong>{member.permission_overrides.length} custom</strong><small>{member.desktop_modules?.length ?? 0} workspaces available</small></td><td><span className={`badge-status ${member.is_active ? "enrolled" : "visa"}`}>{member.is_active ? "Active" : "Disabled"}</span></td><td><div className="staff-table-actions"><button className="btn-secondary" type="button" onClick={() => startEdit(member)}><Pencil size={13}/>Edit access</button><button className="password-button" type="button" onClick={() => {setPasswordTarget(member);setNewPassword("")}}><KeyRound size={13}/>Reset</button></div></td></tr>)}
+        {staff.map(member => <tr key={member.id}><td><strong>{member.full_name}</strong><small>{member.email}</small></td><td><strong>{member.job_title}</strong><small>{roleName(member.role)} · {member.branch}</small></td><td><span className="access-mode-pill">{member.access_mode === "EXACT" ? "Exact custom" : "Role + additions"}</span><small>{member.inactivity_minutes} min inactivity sign-out</small></td><td><strong>{member.permission_overrides.length} custom</strong><small>{member.desktop_modules?.length ?? 0} workspaces available</small></td><td><span className={`badge-status ${member.is_active ? "enrolled" : "visa"}`}>{member.is_active ? "Active" : "Disabled"}</span></td><td>{readOnly?<span className="access-mode-pill">Supervision only</span>:<div className="staff-table-actions"><button className="btn-secondary" type="button" onClick={() => startEdit(member)}><Pencil size={13}/>Edit access</button><button className="password-button" type="button" onClick={() => {setPasswordTarget(member);setNewPassword("")}}><KeyRound size={13}/>Reset</button></div>}</td></tr>)}
         {!staff.length && <tr><td colSpan={6} className="admin-empty">No staff accounts found.</td></tr>}
       </tbody></table></div>
     </div>

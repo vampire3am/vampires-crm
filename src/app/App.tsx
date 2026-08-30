@@ -65,6 +65,9 @@ const MessagesWorkspace = lazy(() =>
 const EmailAutomationWorkspace = lazy(() =>
   import("../features/email/EmailAutomationWorkspace").then(m => ({ default: m.EmailAutomationWorkspace }))
 );
+const AssignmentsWorkspace = lazy(() =>
+  import("../features/assignments/AssignmentsWorkspace").then(m => ({ default: m.AssignmentsWorkspace }))
+);
 
 const NotFound = () => (
   <section className="page-container" style={{ minHeight: "70vh", display: "grid", placeItems: "center" }}>
@@ -256,6 +259,16 @@ export default function App() {
               element={
                 <RoleRouteGuard permission="finance" workspaceName="Finance & Accounting">
                   <FinanceWorkspace />
+                </RoleRouteGuard>
+              }
+            />
+
+            {/* Private and staff-group messaging */}
+            <Route
+              path="/assignments"
+              element={
+                <RoleRouteGuard permission="assignments" workspaceName="Staff Assignments">
+                  <AssignmentsWorkspace />
                 </RoleRouteGuard>
               }
             />

@@ -74,6 +74,7 @@ export function ManagementDashboard() {
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ allocations:[{leaveType:"Casual Leave",days:1}] as LeaveAllocation[], fromDate: "", toDate: "", days: 0, duration:"FULL_DAY" as "FULL_DAY"|"HALF_DAY", reason: "" });
   const canRequestLeave = Boolean(profile && profile.role !== "ADMIN");
+  const canUseAttendance = Boolean(profile && profile.role !== "ADMIN");
 
   const loadMyLeaves = async () => {
     if (!canRequestLeave) return;
@@ -118,6 +119,7 @@ export function ManagementDashboard() {
   };
 
   const loadMyAttendance = async () => {
+    if (!canUseAttendance) { setMyAttendance(null); setAttendanceLoadError(""); return; }
     try { setMyAttendance(await HrmsService.getMyTodayAttendance()); setAttendanceLoadError(""); }
     catch(error) { setMyAttendance(null); setAttendanceLoadError(error instanceof Error ? error.message : "Attendance profile could not be loaded"); }
   };
@@ -176,7 +178,7 @@ export function ManagementDashboard() {
     };
   }, [dashboardRefreshKey]);
 
-  useEffect(() => { void loadMyAttendance(); }, []);
+  useEffect(() => { void loadMyAttendance(); }, [canUseAttendance]);
   useEffect(() => { void loadMyLeaves(); }, [canRequestLeave]);
   useEffect(() => { const timer=setInterval(() => setAttendanceClock(value => value + 1), 60000); return () => clearInterval(timer); }, []);
 
@@ -224,7 +226,7 @@ export function ManagementDashboard() {
         </div>
       )}
 
-      <section className="dashboard-attendance-card" aria-label="My attendance today">
+      {canUseAttendance && <section className="dashboard-attendance-card" aria-label="My attendance today">
         <div className="dashboard-attendance-icon"><Clock size={22} /></div>
         <div className="dashboard-attendance-copy">
           <span className="dashboard-attendance-label">Attendance today</span>
@@ -259,7 +261,7 @@ export function ManagementDashboard() {
           <button type="button" className="btn-secondary" disabled={attendanceBusy || !myAttendance?.clockIn || Boolean(myAttendance.clockOut)} onClick={() => void punchAttendance("out")}><CheckCircle2 size={15}/> Clock Out</button>
           {canRequestLeave && <button type="button" className="btn-secondary dashboard-leave-button" onClick={openLeaveModal}><CalendarDays size={15}/> Request Leave</button>}
         </div>
-      </section>
+      </section>}
 
       {showLeaveModal && canRequestLeave && <div className="modal-backdrop-clean" onClick={()=>setShowLeaveModal(false)}>
         <div className="modal-dialog-clean dashboard-leave-modal" onClick={event=>event.stopPropagation()}>
