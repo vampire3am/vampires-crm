@@ -37,7 +37,7 @@ import {
 import { AECS_ORGANIZATION } from "../../config/organization";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../features/auth/AuthProvider";
+import { useAuth, type RolePermissions } from "../../features/auth/AuthProvider";
 import { ScreenBreakReminder } from "../wellness/ScreenBreakReminder";
 import { GlobalMessageNotifier } from "../common/GlobalMessageNotifier";
 import { IncomingCallToast } from "../calling/IncomingCallToast";
@@ -64,6 +64,24 @@ const SEARCH_ITEMS = [
   { label: "Users & RBAC Permissions", detail: "Active role permissions and maker-checker controls", to: "/settings?tab=roles", icon: ShieldCheck },
   { label: "Settings & ERP Blueprint", detail: "Organization, branches, and statutory profile", to: "/settings", icon: Settings },
 ];
+
+const SEARCH_PERMISSION_BY_PATH: Record<string, keyof RolePermissions> = {
+  dashboard: "dashboard",
+  leads: "leads",
+  students: "students",
+  counselling: "counselling",
+  applications: "applications",
+  b2b: "b2b",
+  classes: "classes",
+  mocks: "mocks",
+  documents: "documents",
+  hrms: "hrms",
+  messages: "messages",
+  "email-automation": "settings",
+  analytics: "reports",
+  assignments: "assignments",
+  settings: "settings",
+};
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -142,10 +160,13 @@ export function AppShell() {
   }, [location.pathname]);
 
   const searchResults = useMemo(() => {
-    return SEARCH_ITEMS.filter(item =>
-      `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase())
-    );
-  }, [query]);
+    return SEARCH_ITEMS.filter(item => {
+      const route = item.to.split("?")[0].replace(/^\//, "");
+      const permission = SEARCH_PERMISSION_BY_PATH[route];
+      const isAuthorized = !permission || permissions[permission];
+      return isAuthorized && `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase());
+    });
+  }, [permissions, query]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMobileOpen(false), 0);
@@ -454,7 +475,7 @@ export function AppShell() {
             </NavLink>}
 
             {/* EMAIL AUTOMATION & DRIP ENGINE */}
-            <NavLink
+            {permissions.settings && <NavLink
               to="/email-automation"
               className={({ isActive }) => (isActive || location.pathname.startsWith("/email-automation") ? "sidebar-link active" : "sidebar-link")}
             >
@@ -463,7 +484,7 @@ export function AppShell() {
                 <span>Email Automation</span>
               </div>
               <span className="sidebar-badge" style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10B981", fontSize: "10.5px", fontWeight: 700 }}>Auto</span>
-            </NavLink>
+            </NavLink>}
           </div>
 
           {/* ADMINISTRATION SECTION (ONLY ADMIN / IT) */}
