@@ -28,13 +28,45 @@ export type StaffAdminInput = Omit<StaffAdminRecord, "id" | "is_active"> & {
 };
 
 async function invoke(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke("invite-staff", { body });
+  const sessionResult = await supabase.auth.getSession();
+  if (sessionResult.error) throw new Error("Unable to verify your administrator session. Sign in again.");
+  let accessToken = sessionResult.data.session?.access_token;
+  if (!accessToken) throw new Error("Your administrator session has expired. Sign in again.");
+
+  const call = (token: string) => supabase.functions.invoke("invite-staff", {
+    body,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  let { data, error } = await call(accessToken);
+  let details: { error?: string } | null = null;
   if (error) {
     const context = (error as { context?: Response }).context;
-    if (context) {
-      const details = await context.clone().json().catch(() => null) as { error?: string } | null;
-      if (details?.error) throw new Error(details.error);
+    details = context
+      ? await context.clone().json().catch(() => null) as { error?: string } | null
+      : null;
+
+    // A restored browser tab can briefly hold an expired JWT. Refresh once and
+    // replay the protected request with the new token instead of showing a
+    // misleading generic Unauthorized dialog.
+    if (details?.error === "Unauthorized" || context?.status === 401) {
+      const refreshed = await supabase.auth.refreshSession();
+      accessToken = refreshed.data.session?.access_token;
+      if (!refreshed.error && accessToken) {
+        ({ data, error } = await call(accessToken));
+        if (error) {
+          const retryContext = (error as { context?: Response }).context;
+          details = retryContext
+            ? await retryContext.clone().json().catch(() => null) as { error?: string } | null
+            : null;
+        }
+      }
     }
+  }
+
+  if (error) {
+    if (details?.error === "Unauthorized") throw new Error("Your administrator session has expired. Sign in again.");
+    if (details?.error) throw new Error(details.error);
     throw new Error(error.message || "Staff operation failed");
   }
   if (data?.error) throw new Error(data.error);
