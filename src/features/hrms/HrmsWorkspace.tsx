@@ -34,6 +34,7 @@ import { HrmsService } from "../../services/hrmsService";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 import { useAuth } from "../auth/AuthProvider";
 import { bsMonthToAdRange, formatBsDate, formatBsMonth, todayAd, todayBs } from "../../lib/nepaliDate";
+import { canAccessHrmsTab, HRMS_TAB_ORDER, type HrmsTab } from "./hrmsAccess";
 
 interface StaffMember {
   id: string;
@@ -170,20 +171,28 @@ const INITIAL_PAYROLL: PayrollRecord[] = [];
 export function HrmsWorkspace() {
   const { profile, hasPermission } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabFromUrl = searchParams.get("tab") as "dashboard" | "staff" | "attendance" | "leaves" | "payroll" | "performance" | "documents" | null;
+  const requestedTab = searchParams.get("tab");
+  const tabFromUrl = HRMS_TAB_ORDER.includes(requestedTab as HrmsTab) ? requestedTab as HrmsTab : null;
+  const allowedTabs = HRMS_TAB_ORDER.filter(tab => canAccessHrmsTab(tab, hasPermission));
+  const defaultTab = allowedTabs[0] ?? "attendance";
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "staff" | "attendance" | "leaves" | "payroll" | "performance" | "documents">(
-    tabFromUrl || "dashboard"
+  const [activeTab, setActiveTab] = useState<HrmsTab>(
+    tabFromUrl && canAccessHrmsTab(tabFromUrl, hasPermission) ? tabFromUrl : defaultTab
   );
 
   useEffect(() => {
-    if (tabFromUrl && tabFromUrl !== activeTab) {
+    const nextTab = tabFromUrl && canAccessHrmsTab(tabFromUrl, hasPermission) ? tabFromUrl : defaultTab;
+    if (nextTab !== activeTab) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveTab(tabFromUrl);
+      setActiveTab(nextTab);
     }
-  }, [tabFromUrl, activeTab]);
+    if (tabFromUrl !== nextTab) {
+      setSearchParams({ tab: nextTab }, { replace: true });
+    }
+  }, [tabFromUrl, activeTab, defaultTab, hasPermission, setSearchParams]);
 
-  const handleTabChange = (tab: "dashboard" | "staff" | "attendance" | "leaves" | "payroll" | "performance" | "documents") => {
+  const handleTabChange = (tab: HrmsTab) => {
+    if (!canAccessHrmsTab(tab, hasPermission)) return;
     setActiveTab(tab);
     setSearchParams({ tab });
   };

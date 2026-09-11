@@ -43,6 +43,7 @@ import { GlobalMessageNotifier } from "../common/GlobalMessageNotifier";
 import { IncomingCallToast } from "../calling/IncomingCallToast";
 import { MessagingService } from "../../services/messagingService";
 import { NotificationService, type StaffNotification } from "../../services/notificationService";
+import { canAccessHrmsTab, type HrmsTab } from "../../features/hrms/hrmsAccess";
 
 const SEARCH_ITEMS = [
   { label: "Dashboard Overview", detail: "Kathmandu Hub operations snapshot", to: "/dashboard", icon: LayoutDashboard },
@@ -98,7 +99,7 @@ export function AppShell() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, permissions, signOut } = useAuth();
+  const { profile, permissions, hasPermission, signOut } = useAuth();
   const supervisionOnly = profile?.role === "ADMIN";
   const currentStaffId = profile?.id ?? "pending-session";
   const unreadNotifications=notifications.filter(item=>!item.readAt).length;
@@ -164,9 +165,15 @@ export function AppShell() {
       const route = item.to.split("?")[0].replace(/^\//, "");
       const permission = SEARCH_PERMISSION_BY_PATH[route];
       const isAuthorized = !permission || permissions[permission];
-      return isAuthorized && `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase());
+      const hrmsTab = item.to.startsWith("/hrms?") ? new URLSearchParams(item.to.split("?")[1]).get("tab") as HrmsTab | null : null;
+      const hasHrmsAction = item.to === "/hrms/reports"
+        ? hasPermission("hr.reports.view")
+        : item.to === "/hrms/settings"
+          ? hasPermission("hr.settings.manage")
+          : !hrmsTab || canAccessHrmsTab(hrmsTab, hasPermission);
+      return isAuthorized && hasHrmsAction && `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase());
     });
-  }, [permissions, query]);
+  }, [permissions, hasPermission, query]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMobileOpen(false), 0);
@@ -393,61 +400,61 @@ export function AppShell() {
 
                 {hrmsOpen && (
                   <div className="sidebar-submenu">
-                    <NavLink
+                    {canAccessHrmsTab("dashboard", hasPermission) && <NavLink
                       to="/hrms?tab=dashboard"
                       className={({ isActive }) => (isActive && (location.search.includes("tab=dashboard") || !location.search) ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
                       <LayoutDashboard size={14} />
                       <span>HR Dashboard</span>
-                    </NavLink>
+                    </NavLink>}
 
-                    <NavLink
+                    {canAccessHrmsTab("staff", hasPermission) && <NavLink
                       to="/hrms?tab=staff"
                       className={({ isActive }) => (isActive && location.search.includes("tab=staff") ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
                       <Users size={14} />
                       <span>Employees</span>
-                    </NavLink>
+                    </NavLink>}
 
-                    <NavLink
+                    {canAccessHrmsTab("attendance", hasPermission) && <NavLink
                       to="/hrms?tab=attendance"
                       className={({ isActive }) => (isActive && location.search.includes("tab=attendance") ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
                       <Clock size={14} />
                       <span>Attendance</span>
-                    </NavLink>
+                    </NavLink>}
 
-                    <NavLink
+                    {canAccessHrmsTab("leaves", hasPermission) && <NavLink
                       to="/hrms?tab=leaves"
                       className={({ isActive }) => (isActive && location.search.includes("tab=leaves") ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
                       <Calendar size={14} />
                       <span>Leave</span>
-                    </NavLink>
+                    </NavLink>}
 
-                    <NavLink
+                    {canAccessHrmsTab("payroll", hasPermission) && <NavLink
                       to="/hrms?tab=payroll"
                       className={({ isActive }) => (isActive && location.search.includes("tab=payroll") ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
                       <Wallet size={14} />
                       <span>Payroll</span>
-                    </NavLink>
+                    </NavLink>}
 
-                    <NavLink
+                    {canAccessHrmsTab("performance", hasPermission) && <NavLink
                       to="/hrms?tab=performance"
                       className={({ isActive }) => (isActive && location.search.includes("tab=performance") ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
                       <TrendingUp size={14} />
                       <span>Performance</span>
-                    </NavLink>
+                    </NavLink>}
 
-                    <NavLink
+                    {canAccessHrmsTab("documents", hasPermission) && <NavLink
                       to="/hrms?tab=documents"
                       className={({ isActive }) => (isActive && location.search.includes("tab=documents") ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
                       <FileText size={14} />
                       <span>HR Documents</span>
-                    </NavLink>
+                    </NavLink>}
                   </div>
                 )}
               </div>
