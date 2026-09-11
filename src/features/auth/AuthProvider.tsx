@@ -1,5 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 
 export type StaffRole =
@@ -116,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<StaffProfile | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [effectivePermissions, setEffectivePermissions] = useState<string[]>([]);
+  const activeUserId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -124,14 +125,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
       if (error) console.error("Unable to restore staff session", error);
+      activeUserId.current = data.session?.user.id ?? null;
       setSession(data.session);
       setLoading(Boolean(data.session));
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      const nextUserId = nextSession?.user.id ?? null;
+      const identityChanged = activeUserId.current !== nextUserId;
+      activeUserId.current = nextUserId;
       setSession(nextSession);
-      if (!nextSession) { setProfile(null); setEffectivePermissions([]); }
-      setLoading(Boolean(nextSession));
+      if (!nextSession) {
+        setProfile(null);
+        setEffectivePermissions([]);
+        setLoading(false);
+      } else if (identityChanged) {
+        // Only a real account change should block the workspace. Supabase can
+        // emit SIGNED_IN/TOKEN_REFRESHED again when a background tab regains
+        // focus; treating those events as a fresh login caused a full-page
+        // "Connecting securely" refresh every time the user returned.
+        setLoading(true);
+      }
     });
 
     return () => {
@@ -168,7 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
     return () => { mounted = false; };
-  }, [session]);
+  }, [session?.user.id]);
 
   useEffect(() => {
     if (!profile || !session) return;
