@@ -88,14 +88,23 @@ import { RoleRouteGuard } from "../features/auth/RoleRouteGuard";
 
 const BOOT_LOADER_SESSION_KEY = "aecs_boot_loader_seen_v1";
 
-export default function App() {
-  const [showBootLoader, setShowBootLoader] = useState(() => {
-    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-    const isManualReload = navigation?.type === "reload";
-    if (sessionStorage.getItem(BOOT_LOADER_SESSION_KEY) && !isManualReload) return false;
+function consumeInitialBootLoader() {
+  try {
+    if (sessionStorage.getItem(BOOT_LOADER_SESSION_KEY)) return false;
     sessionStorage.setItem(BOOT_LOADER_SESSION_KEY, "true");
     return true;
-  });
+  } catch {
+    // Keep the workspace usable if browser privacy settings block session storage.
+    return false;
+  }
+}
+
+// Resolve this once per document load. React development remounts must not replay
+// the animation, and a restored/reloaded tab keeps the session-storage marker.
+const showInitialBootLoader = consumeInitialBootLoader();
+
+export default function App() {
+  const [showBootLoader, setShowBootLoader] = useState(showInitialBootLoader);
 
   useEffect(() => {
     if (!showBootLoader) return;
