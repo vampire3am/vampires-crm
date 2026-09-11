@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { generateUuid } from "../lib/generateUuid";
 
 export type AssignmentStatus="ASSIGNED"|"IN_PROGRESS"|"SUBMITTED"|"REVISION_REQUIRED"|"COMPLETED"|"CANCELLED";
 export type AssignmentPriority="LOW"|"MEDIUM"|"HIGH"|"URGENT";
@@ -16,5 +17,5 @@ export const AssignmentService={
   async progress(id:string,value:number){const{error}=await supabase.rpc("update_my_assignment_progress",{assignment_uuid:id,next_progress:value});if(error)throw error},
   async submit(id:string,report:string,links:string[]){const{error}=await supabase.rpc("submit_staff_assignment",{assignment_uuid:id,report_text:report,evidence:links});if(error)throw error},
   async review(id:string,decision:"COMPLETED"|"REVISION_REQUIRED",note:string){const{error}=await supabase.rpc("review_staff_assignment",{assignment_uuid:id,decision,review_note:note});if(error)throw error},
-  subscribe(onChange:()=>void){const channel=supabase.channel(`assignments-${crypto.randomUUID()}`).on("postgres_changes",{event:"*",schema:"public",table:"staff_assignments"},onChange).subscribe();return()=>{void supabase.removeChannel(channel)}}
+  subscribe(onChange:()=>void){const channel=supabase.channel(`assignments-${generateUuid()}`).on("postgres_changes",{event:"*",schema:"public",table:"staff_assignments"},onChange).subscribe();return()=>{void supabase.removeChannel(channel)}}
 };
