@@ -7,6 +7,7 @@ const supervision=read("supabase/migrations/202608300002_admin_supervision_only.
 const adminAssignment=read("supabase/migrations/202608300004_admin_assignment_authority.sql");
 const adminHrms=read("supabase/migrations/202608300005_admin_hrms_authority.sql");
 const workspace=read("src/features/assignments/AssignmentsWorkspace.tsx");
+const service=read("src/services/assignmentService.ts");
 const shell=read("src/components/layout/AppShell.tsx");
 const routes=read("src/app/App.tsx");
 const dashboard=read("src/features/dashboard/ManagementDashboard.tsx");
@@ -32,6 +33,8 @@ assert.match(workspace,/Completion report/);
 assert.match(workspace,/Request revision/);
 assert.match(workspace,/roleTemplates/);
 assert.match(workspace,/const canAssign=hasPermission\("assignments\.assign"\)/);
+assert.match(service,/generateUuid\(\)/);
+assert.doesNotMatch(service,/crypto\.randomUUID\(\)/);
 assert.match(shell,/to="\/assignments"/);
 assert.match(routes,/path="\/assignments"/);
 assert.match(dashboard,/canUseAttendance && <section className="dashboard-attendance-card"/);
