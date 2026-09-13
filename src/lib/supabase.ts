@@ -7,10 +7,14 @@ import { generateUuid } from "./generateUuid";
 const productionUrl = "https://igzrcgicslcgbowzrtzz.supabase.co";
 const productionPublishableKey = "sb_publishable_lPKVBwVDgvO_uf8nlSSUsA_FqOAC1Yg";
 
-const url = (import.meta.env.VITE_SUPABASE_URL || productionUrl) as string;
+const viteEnv = (import.meta as ImportMeta & {
+  env?: Record<string, string | undefined>;
+}).env ?? {};
+
+const url = (viteEnv.VITE_SUPABASE_URL || productionUrl) as string;
 const key = (
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  viteEnv.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  viteEnv.VITE_SUPABASE_ANON_KEY ||
   productionPublishableKey
 ) as string;
 export const isSupabaseConfigured = Boolean(url && key);

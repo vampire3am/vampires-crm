@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Phone, PhoneCall, PhoneOff, Video } from "lucide-react";
+import { Phone, PhoneCall, PhoneOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../features/auth/AuthProvider";
 import {
@@ -19,18 +19,26 @@ export function IncomingCallToast() {
   // Check for incoming call signals on server
   const checkCalls = async () => {
     try {
-      const res = await fetch("/api/sync/call/status");
-      if (res.ok) {
-        const activeCalls: Record<string, ActiveCallSession> = await res.json();
-        const callKeys = Object.keys(activeCalls);
+      const activeCalls = await CallingService.listActiveCalls();
+      const callKeys = Object.keys(activeCalls);
 
         for (const key of callKeys) {
           const call = activeCalls[key];
           // If I am the recipient of an incoming ringing call
           if (call.recipientId === currentStaffId && call.status === "RINGING") {
+            if (Date.now() - call.startedAt >= 60_000) {
+              ringtones.stop();
+              setIncomingCall(null);
+              await CallingService.endCall(call.callId, currentStaffId, "missed");
+              return;
+            }
             if (!incomingCall && !activeSession) {
               setIncomingCall(call);
               ringtones.playIncomingRing();
+              if("Notification" in window&&Notification.permission==="granted"){
+                const alert=new Notification(`Incoming CRM call · ${call.callerName}`,{body:`${call.callerRole} is calling you`,tag:`crm-call-${call.callId}`,requireInteraction:true});
+                alert.onclick=()=>{window.focus();alert.close()};
+              }
             }
             return;
           }
@@ -54,7 +62,6 @@ export function IncomingCallToast() {
           setIncomingCall(null);
           ringtones.stop();
         }
-      }
     } catch {}
   };
 
@@ -69,12 +76,8 @@ export function IncomingCallToast() {
   const handleAcceptCall = async () => {
     if (!incomingCall) return;
     ringtones.stop();
-    await CallingService.answerCall(incomingCall, currentStaffId);
-    setActiveSession({
-      ...incomingCall,
-      status: "CONNECTED",
-    });
-    setIncomingCall(null);
+    try{await CallingService.answerCall(incomingCall, currentStaffId);setActiveSession({...incomingCall,status:"CONNECTED"});setIncomingCall(null)}
+    catch{setIncomingCall(null);CallingService.stopMediaStream()}
   };
 
   const handleDeclineCall = async () => {
@@ -123,8 +126,8 @@ export function IncomingCallToast() {
                   {incomingCall.callerRole}
                 </span>
                 <span style={{ fontSize: "11.5px", color: "#FDBA74", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
-                  {incomingCall.callType === "audio" ? <PhoneCall size={12} /> : <Video size={12} />}
-                  Incoming {incomingCall.callType === "audio" ? "Voice Call…" : "HD Video Call…"}
+                  <PhoneCall size={12} />
+                  Incoming voice call…
                 </span>
               </div>
             </div>

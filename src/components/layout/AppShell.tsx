@@ -787,7 +787,7 @@ export function AppShell() {
 
         {/* Dynamic Route Content */}
         <main id="main-content" className={`app-content ${supervisionOnly?"admin-supervision-mode":""}`} style={{ flex: 1 }} tabIndex={-1}>
-          {supervisionOnly&&<div className="admin-supervision-banner"><ShieldCheck size={16}/><div><strong>Admin oversight with authorized operations</strong><span>You can manage staff access, internal messages, assignments, HRMS and accounting entries. Other CRM modules remain supervision-only.</span></div></div>}
+          {supervisionOnly&&location.pathname!=="/messages"&&<div className="admin-supervision-banner"><ShieldCheck size={16}/><div><strong>Admin oversight with authorized operations</strong><span>You can manage staff access, internal messages, assignments, HRMS and accounting entries. Other CRM modules remain supervision-only.</span></div></div>}
           <Outlet />
         </main>
       </div>

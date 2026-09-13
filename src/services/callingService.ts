@@ -1,7 +1,8 @@
 import { type StaffUser } from "./messagingService";
 import { getGuitarNokiaRingtoneAudio } from "../utils/guitarNokiaRingtone";
+import { supabase } from "../lib/supabase";
 
-export type CallType = "audio" | "video";
+export type CallType = "audio";
 export type CallStatus = "RINGING" | "CONNECTED" | "ENDED" | "DECLINED" | "BUSY";
 
 export interface ActiveCallSession {
@@ -30,6 +31,26 @@ export const RTC_ICE_SERVERS: RTCConfiguration = {
   iceCandidatePoolSize: 10,
 };
 
+type VoiceCallRow = Record<string, any>;
+const mapVoiceCall = (row: VoiceCallRow): ActiveCallSession => ({
+  callId: row.id,
+  callerId: row.caller_id,
+  callerName: row.caller_snapshot?.name ?? "Staff member",
+  callerRole: row.caller_snapshot?.role ?? "Staff",
+  callerAvatarBg: row.caller_snapshot?.avatarBg ?? "#F97316",
+  recipientId: row.recipient_id,
+  recipientName: row.recipient_snapshot?.name ?? "Staff member",
+  recipientRole: row.recipient_snapshot?.role ?? "Staff",
+  recipientAvatarBg: row.recipient_snapshot?.avatarBg ?? "#059669",
+  callType: "audio",
+  status: row.status,
+  startedAt: Number(row.started_at),
+  answeredAt: row.answered_at ? Number(row.answered_at) : undefined,
+  offer: row.offer,
+  answer: row.answer,
+  candidates: row.candidates ?? [],
+});
+
 // Global AudioContext for crystal-clear Web Audio playback
 let sharedAudioCtx: AudioContext | null = null;
 
@@ -47,17 +68,17 @@ function getSharedAudioContext(): AudioContext {
 // Auto-unlock audio on user click or touch anywhere on the page
 if (typeof window !== "undefined") {
   const unlockAudio = () => {
-    if (sharedAudioCtx && sharedAudioCtx.state === "suspended") {
-      sharedAudioCtx.resume().catch(() => {});
-    }
+    const ctx=getSharedAudioContext();
+    if(ctx.state==="suspended")void ctx.resume();
+    const oscillator=ctx.createOscillator(),gain=ctx.createGain();gain.gain.value=.0001;oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start();oscillator.stop(ctx.currentTime+.01);
     const ringAudio = getGuitarNokiaRingtoneAudio();
     if (ringAudio) {
       ringAudio.load();
     }
   };
-  window.addEventListener("click", unlockAudio, { once: false });
-  window.addEventListener("keydown", unlockAudio, { once: false });
-  window.addEventListener("touchstart", unlockAudio, { once: false });
+  window.addEventListener("click", unlockAudio, { once: true });
+  window.addEventListener("keydown", unlockAudio, { once: true });
+  window.addEventListener("touchstart", unlockAudio, { once: true });
 }
 
 // Sound Synthesizer for Outgoing and Incoming Ringing
@@ -210,7 +231,7 @@ export class CallingService {
   private static currentUserId: string | null = null;
 
   // Initialize WebRTC media stream
-  static async getMediaStream(callType: CallType): Promise<MediaStream> {
+  static async getMediaStream(_callType: CallType): Promise<MediaStream> {
     if (this.localStream) {
       return this.localStream;
     }
@@ -223,22 +244,13 @@ export class CallingService {
           noiseSuppression: true,
           autoGainControl: true,
         },
-        video: callType === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+        video: false,
       });
       this.localStream = stream;
       return stream;
     } catch (err) {
-      console.warn("Direct microphone request failed, creating virtual fallback stream:", err);
-      try {
-        const audioCtx = getSharedAudioContext();
-        const dest = audioCtx.createMediaStreamDestination();
-        this.localStream = dest.stream;
-        return dest.stream;
-      } catch {
-        const fallback = new MediaStream();
-        this.localStream = fallback;
-        return fallback;
-      }
+      console.warn("Microphone request failed:", err);
+      throw new Error("Microphone access is required for a voice call. Allow microphone permission and try again.");
     }
   }
 
@@ -377,48 +389,6 @@ export class CallingService {
     }
   }
 
-  static setVideoEnabled(enabled: boolean) {
-    if (this.localStream) {
-      this.localStream.getVideoTracks().forEach(track => {
-        track.enabled = enabled;
-      });
-    }
-  }
-
-  static async startScreenShare(): Promise<MediaStream | null> {
-    try {
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-      });
-      const videoTrack = displayStream.getVideoTracks()[0];
-      if (this.peerConnection) {
-        const sender = this.peerConnection.getSenders().find(s => s.track?.kind === "video");
-        if (sender) {
-          sender.replaceTrack(videoTrack);
-        }
-      }
-      videoTrack.onended = () => {
-        this.stopScreenShare();
-      };
-      return displayStream;
-    } catch {
-      return null;
-    }
-  }
-
-  static async stopScreenShare() {
-    if (this.localStream) {
-      const cameraTrack = this.localStream.getVideoTracks()[0];
-      if (this.peerConnection && cameraTrack) {
-        const sender = this.peerConnection.getSenders().find(s => s.track?.kind === "video");
-        if (sender) {
-          sender.replaceTrack(cameraTrack);
-        }
-      }
-    }
-  }
-
   static setVoiceLevelCallback(cb: ((level: number) => void) | null) {
     this.onVoiceLevelCallback = cb;
   }
@@ -443,14 +413,14 @@ export class CallingService {
   static async startCall(
     caller: StaffUser,
     recipient: StaffUser,
-    callType: CallType,
+    _callType: CallType,
     onRemoteStream?: (stream: MediaStream) => void
   ): Promise<ActiveCallSession> {
     this.stopMediaStream();
     getSharedAudioContext();
     this.onRemoteStreamCallback = onRemoteStream || null;
 
-    const stream = await this.getMediaStream(callType);
+    const stream = await this.getMediaStream("audio");
     const pc = new RTCPeerConnection(RTC_ICE_SERVERS);
     this.peerConnection = pc;
 
@@ -470,27 +440,15 @@ export class CallingService {
     };
 
     const callId = `call-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-
-    // Relay local ICE candidates
-    pc.onicecandidate = event => {
-      if (event.candidate) {
-        fetch("/api/sync/call/ice", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            callId,
-            candidate: event.candidate,
-            senderId: caller.id,
-            targetId: recipient.id,
-          }),
-        }).catch(() => {});
-      }
-    };
+    const pendingCandidates:RTCIceCandidateInit[]=[];
+    let callPublished=false;
+    const publishCandidate=(candidate:RTCIceCandidateInit)=>void supabase.rpc("add_staff_voice_call_candidate", {call_id:callId,target_staff_id:recipient.id,candidate_payload:candidate});
+    pc.onicecandidate=event=>{if(event.candidate){const candidate=event.candidate.toJSON();if(callPublished)publishCandidate(candidate);else pendingCandidates.push(candidate)}};
 
     // Create SDP Offer
     const offer = await pc.createOffer({
       offerToReceiveAudio: true,
-      offerToReceiveVideo: callType === "video",
+      offerToReceiveVideo: false,
     });
     await pc.setLocalDescription(offer);
 
@@ -504,7 +462,7 @@ export class CallingService {
       recipientName: recipient.fullName,
       recipientRole: recipient.role,
       recipientAvatarBg: recipient.avatarBg || "#059669",
-      callType,
+      callType: "audio",
       status: "RINGING",
       startedAt: Date.now(),
       offer: {
@@ -513,20 +471,18 @@ export class CallingService {
       },
     };
 
-    // Start caller audio relay
-    this.startAudioRelay(callId, caller.id, recipient.id, stream);
-
     ringtones.playOutgoingRingback();
 
-    try {
-      await fetch("/api/sync/call/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(callSession),
-      });
-    } catch (err) {
-      console.error("Failed to start call signal:", err);
-    }
+    const {error}=await supabase.from("staff_voice_calls").insert({
+      id:callId,caller_id:caller.id,recipient_id:recipient.id,
+      caller_snapshot:{name:caller.fullName,role:caller.role,avatarBg:caller.avatarBg},
+      recipient_snapshot:{name:recipient.fullName,role:recipient.role,avatarBg:recipient.avatarBg},
+      status:"RINGING",offer:callSession.offer,started_at:callSession.startedAt,
+    });
+    if(error){this.stopMediaStream();ringtones.stop();throw new Error(error.message)}
+
+    callPublished=true;
+    pendingCandidates.forEach(publishCandidate);
 
     return callSession;
   }
@@ -563,16 +519,7 @@ export class CallingService {
     // Relay local ICE candidates
     pc.onicecandidate = event => {
       if (event.candidate) {
-        fetch("/api/sync/call/ice", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            callId: callSession.callId,
-            candidate: event.candidate,
-            senderId: responderId,
-            targetId: callSession.callerId,
-          }),
-        }).catch(() => {});
+        void supabase.rpc("add_staff_voice_call_candidate", {call_id:callSession.callId,target_staff_id:callSession.callerId,candidate_payload:event.candidate.toJSON()});
       }
     };
 
@@ -585,22 +532,8 @@ export class CallingService {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
-    // Start recipient audio relay
-    this.startAudioRelay(callSession.callId, responderId, callSession.callerId, stream);
-
-    try {
-      await fetch("/api/sync/call/answer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          callId: callSession.callId,
-          answer: { type: answer.type, sdp: answer.sdp },
-          responderId,
-        }),
-      });
-    } catch (err) {
-      console.error("Failed to answer call:", err);
-    }
+    const {error}=await supabase.from("staff_voice_calls").update({status:"CONNECTED",answered_at:Date.now(),answer:{type:answer.type,sdp:answer.sdp}}).eq("id",callSession.callId).eq("recipient_id",responderId).eq("status","RINGING");
+    if(error){this.stopMediaStream();throw new Error(error.message)}
   }
 
   // 3. Caller receives SDP Answer from Recipient
@@ -618,11 +551,11 @@ export class CallingService {
   static async handleRemoteCandidate(candidate: RTCIceCandidateInit): Promise<void> {
     const key = JSON.stringify(candidate);
     if (this.processedIceCandidates.has(key)) return;
-    this.processedIceCandidates.add(key);
 
     if (this.peerConnection && this.peerConnection.remoteDescription) {
       try {
         await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        this.processedIceCandidates.add(key);
       } catch (err) {
         console.warn("Could not add ICE candidate:", err);
       }
@@ -639,14 +572,18 @@ export class CallingService {
     ringtones.stop();
     this.stopMediaStream();
 
-    try {
-      await fetch("/api/sync/call/end", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ callId, endedBy, reason, durationSeconds }),
-      });
-    } catch (err) {
-      console.error("Failed to end call:", err);
-    }
+    const status:CallStatus=reason==="declined"?"DECLINED":"ENDED";
+    const {error}=await supabase.from("staff_voice_calls").update({status,ended_at:new Date().toISOString()}).eq("id",callId).or(`caller_id.eq.${endedBy},recipient_id.eq.${endedBy}`);
+    if(error)console.error("Failed to end call:",error);
+  }
+
+  static async getCall(callId:string):Promise<ActiveCallSession|null>{
+    const{data,error}=await supabase.from("staff_voice_calls").select("*").eq("id",callId).maybeSingle();
+    if(error)throw error;return data?mapVoiceCall(data):null;
+  }
+
+  static async listActiveCalls():Promise<Record<string,ActiveCallSession>>{
+    const{data,error}=await supabase.from("staff_voice_calls").select("*").in("status",["RINGING","CONNECTED"]).order("created_at",{ascending:false}).limit(20);
+    if(error)throw error;return Object.fromEntries((data??[]).map(row=>{const call=mapVoiceCall(row);return[call.callId,call]}));
   }
 }

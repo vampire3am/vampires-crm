@@ -14,42 +14,25 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../features/auth/AuthProvider";
 import { type ChatMessage, MessagingService } from "../../services/messagingService";
 
-// Professional Web Audio Synthesizer for instant crystal-clear chime
+let messageAudioContext:AudioContext|null=null;
+const getMessageAudioContext=()=>{const AudioContextClass=window.AudioContext||(window as any).webkitAudioContext;if(!AudioContextClass)return null;messageAudioContext??=new AudioContextClass();return messageAudioContext};
+
+export async function unlockMessageAudio(){
+  const ctx=getMessageAudioContext();if(!ctx)return false;
+  if(ctx.state==="suspended")await ctx.resume();
+  const oscillator=ctx.createOscillator(),gain=ctx.createGain();gain.gain.value=.0001;oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start();oscillator.stop(ctx.currentTime+.01);
+  return ctx.state==="running";
+}
+
+// Loud, distinctive three-note alert, played by an audio context unlocked by a user gesture.
 export function playChimeNotification() {
   try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-
-    if (ctx.state === "suspended") {
-      ctx.resume();
-    }
-
+    const ctx=getMessageAudioContext();
+    if(!ctx||ctx.state!=="running")return;
     const now = ctx.currentTime;
-
-    // First tone (pleasant mid-tone D5: 587.33 Hz)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(587.33, now);
-    gain1.gain.setValueAtTime(0.18, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.3);
-
-    // Second tone (harmonic high chime A5: 880 Hz)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = "sine";
-    osc2.frequency.setValueAtTime(880, now + 0.08);
-    gain2.gain.setValueAtTime(0.22, now + 0.08);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.08);
-    osc2.stop(now + 0.55);
+    [{frequency:659.25,offset:0,duration:.22,volume:.34},{frequency:880,offset:.14,duration:.3,volume:.38},{frequency:1046.5,offset:.32,duration:.45,volume:.42}].forEach(note=>{
+      const oscillator=ctx.createOscillator(),gain=ctx.createGain();oscillator.type="sine";oscillator.frequency.setValueAtTime(note.frequency,now+note.offset);gain.gain.setValueAtTime(note.volume,now+note.offset);gain.gain.exponentialRampToValueAtTime(.001,now+note.offset+note.duration);oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start(now+note.offset);oscillator.stop(now+note.offset+note.duration);
+    });
   } catch (err) {
     console.warn("Audio notification playback failed:", err);
   }
@@ -74,7 +57,7 @@ export function GlobalMessageNotifier() {
 
   const [toasts, setToasts] = useState<ActiveToastNotification[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const lastProcessedMsgId = useRef<string | null>(null);
+  const knownMessageIds = useRef(new Set<string>());
   const isFirstLoad = useRef(true);
 
   // Current logged in staff ID
@@ -83,35 +66,32 @@ export function GlobalMessageNotifier() {
   const checkForNewMessages = async () => {
     try {
       const allMsgs = await MessagingService.getMessages();
-      if (!allMsgs || allMsgs.length === 0) return;
+      if (!allMsgs) return;
+      if(allMsgs.length===0){isFirstLoad.current=false;return}
 
-      const latestMsg = allMsgs[allMsgs.length - 1];
-
-      // On initial boot, just record the latest message without dinging
+      // The first snapshot establishes the baseline. Later snapshots process every
+      // unseen row, so bursts and realtime/polling races cannot lose notifications.
       if (isFirstLoad.current) {
-        lastProcessedMsgId.current = latestMsg.id;
+        allMsgs.forEach(message=>knownMessageIds.current.add(message.id));
         isFirstLoad.current = false;
         return;
       }
-
-      // If a new message arrived
-      if (latestMsg.id !== lastProcessedMsgId.current) {
-        lastProcessedMsgId.current = latestMsg.id;
-
-        // Don't notify if I am the sender
-        if (latestMsg.senderId === currentStaffId) {
-          return;
-        }
-
-        // Strict DM Privacy: If it's a private direct message and I am not the intended recipient, do NOT alert or display
-        if (latestMsg.recipientId && latestMsg.recipientId !== currentStaffId) {
-          return;
-        }
+      const unseen=allMsgs.filter(message=>!knownMessageIds.current.has(message.id));
+      allMsgs.forEach(message=>knownMessageIds.current.add(message.id));
+      for(const latestMsg of unseen){
+        if(latestMsg.senderId===currentStaffId)continue;
+        if(latestMsg.recipientId&&latestMsg.recipientId!==currentStaffId)continue;
 
         // Play Sound
         if (soundEnabled) {
           playChimeNotification();
         }
+
+        if("Notification" in window&&Notification.permission==="granted"&&document.hidden){
+          const desktopAlert=new Notification(`${latestMsg.senderName} · CRM message`,{body:latestMsg.content||"Sent an attachment",tag:`crm-message-${latestMsg.id}`});
+          desktopAlert.onclick=()=>{window.focus();navigate("/messages");desktopAlert.close()};
+        }
+        if(document.hidden)document.title=`New message from ${latestMsg.senderName} · AECS CRM`;
 
         // Show Visual Popup Toast
         const newToast: ActiveToastNotification = {
@@ -137,6 +117,9 @@ export function GlobalMessageNotifier() {
   };
 
   useEffect(() => {
+    const unlock=()=>{void unlockMessageAudio()};
+    window.addEventListener("pointerdown",unlock,{once:true});
+    window.addEventListener("keydown",unlock,{once:true});
     // Initial fetch
     checkForNewMessages();
 
@@ -149,6 +132,9 @@ export function GlobalMessageNotifier() {
     return () => {
       unsubscribe();
       clearInterval(interval);
+      window.removeEventListener("pointerdown",unlock);
+      window.removeEventListener("keydown",unlock);
+      document.title="Abroad Education Consultancy Services";
     };
   }, [currentStaffId, soundEnabled]);
 
