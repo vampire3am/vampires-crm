@@ -63,7 +63,6 @@ import {
   UserCheck,
   UserPlus,
   Users,
-  Video,
   Volume2,
   X,
   Zap,
@@ -79,14 +78,24 @@ import {
 } from "../../services/messagingService";
 import { StudentService } from "../../services/studentService";
 import { useAuth } from "../auth/AuthProvider";
-import { playChimeNotification } from "../../components/common/GlobalMessageNotifier";
+import { unlockMessageAudio } from "../../components/common/GlobalMessageNotifier";
 import {
   type ActiveCallSession,
   CallingService,
 } from "../../services/callingService";
 import { CallModal } from "../../components/calling/CallModal";
+import { notifyError } from "../../components/common/CrmNotifications";
 
 const QUICK_REACTION_EMOJIS = ["👍", "❤️", "😆", "😮", "😢", "🔥"];
+const formatSeenStatus = (readAt: string) => {
+  const elapsed = Math.max(0, Date.now() - new Date(readAt).getTime());
+  const minutes = Math.floor(elapsed / 60_000);
+  if (minutes < 1) return "Seen now";
+  if (minutes < 60) return `Seen ${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Seen ${hours} hr${hours === 1 ? "" : "s"} ago`;
+  return `Seen ${Math.floor(hours / 24)} day${hours < 48 ? "" : "s"} ago`;
+};
 
 export function MessagesWorkspace() {
   const { profile } = useAuth();
@@ -139,23 +148,22 @@ export function MessagesWorkspace() {
   const [groupError,setGroupError]=useState("");
   const [selectedStudentTag, setSelectedStudentTag] = useState<{ code: string; name: string } | null>(null);
   const [stagedAttachments, setStagedAttachments] = useState<ChatAttachment[]>([]);
-  const [showInfoSidebar, setShowInfoSidebar] = useState(false);
+  const [showInfoSidebar, setShowInfoSidebar] = useState(true);
   const [showEmojiTray, setShowEmojiTray] = useState(false);
   const [outgoingCallSession, setOutgoingCallSession] = useState<ActiveCallSession | null>(null);
+  const[alertsEnabled,setAlertsEnabled]=useState(()=>"Notification" in window&&Notification.permission==="granted");
+  const [,setReceiptClock]=useState(0);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
+  useEffect(()=>{const timer=window.setInterval(()=>setReceiptClock(value=>value+1),60_000);return()=>window.clearInterval(timer)},[]);
+
   const handleStartVoiceCall = async () => {
     if (!currentRecipient) return;
-    const session = await CallingService.startCall(currentStaff, currentRecipient, "audio");
-    setOutgoingCallSession(session);
+    try{const session = await CallingService.startCall(currentStaff, currentRecipient, "audio");setOutgoingCallSession(session)}
+    catch(error){notifyError("Voice call could not start",error instanceof Error?error.message:"Check microphone access and try again")}
   };
-
-  const handleStartVideoCall = async () => {
-    if (!currentRecipient) return;
-    const session = await CallingService.startCall(currentStaff, currentRecipient, "video");
-    setOutgoingCallSession(session);
-  };
+  const enableAlerts=async()=>{await unlockMessageAudio();if("Notification" in window){const permission=await Notification.requestPermission();setAlertsEnabled(permission==="granted")}else setAlertsEnabled(true)};
 
   const handleSelectRecipient = (id: string) => {
     setActiveChannelId(null);
@@ -177,7 +185,6 @@ export function MessagesWorkspace() {
       setLoadError("");
       const [msgs,staff,availableChannels] = await Promise.all([MessagingService.getMessages(),MessagingService.getStaff(),MessagingService.getChannels()]);
       setMessages(msgs);
-      await MessagingService.markAllRead();
       setStaffUsers(staff);
       setChannels(availableChannels);
       const studs = await StudentService.getStudents();
@@ -256,6 +263,35 @@ export function MessagesWorkspace() {
     });
   }, [messages, activeRecipientId, activeChannelId, currentUserId]);
 
+  const latestIncomingId = useMemo(
+    () => [...threadMessages].reverse().find(message => message.senderId !== currentUserId)?.id,
+    [threadMessages, currentUserId],
+  );
+  const latestOutgoingId = useMemo(
+    () => [...threadMessages].reverse().find(message => message.senderId === currentUserId)?.id,
+    [threadMessages, currentUserId],
+  );
+
+  useEffect(() => {
+    if (!activeRecipientId && !activeChannelId) return;
+    void MessagingService.markConversationRead({
+      recipientId: activeRecipientId ?? undefined,
+      channelId: activeChannelId ?? undefined,
+    }).catch(() => {});
+  }, [activeRecipientId, activeChannelId, latestIncomingId]);
+
+  const conversationAttachments = useMemo(
+    () => threadMessages.flatMap(message =>
+      (message.attachments ?? []).map((attachment, index) => ({
+        ...attachment,
+        key: `${message.id}-${index}`,
+        senderName: message.senderName,
+        timestamp: message.timestamp,
+      })),
+    ),
+    [threadMessages],
+  );
+
   // Message count and latest message preview per contact - strictly for the logged-in user
   const conversationSummaries = useMemo(() => {
     const summaries: Record<string, { lastMsg: ChatMessage | null; count: number }> = {};
@@ -268,7 +304,7 @@ export function MessagesWorkspace() {
       );
       summaries[u.id] = {
         lastMsg: msgs.length > 0 ? msgs[msgs.length - 1] : null,
-        count: msgs.length,
+        count: msgs.filter(message => message.senderId === u.id && message.recipientId === currentUserId && !message.readAt).length,
       };
     }
 
@@ -315,8 +351,6 @@ export function MessagesWorkspace() {
     const textToSend = customText !== undefined ? customText : inputText;
     if (!textToSend.trim() && stagedAttachments.length === 0) return;
 
-    playChimeNotification();
-
     await MessagingService.sendMessage({
       senderId: currentUserId,
       senderName: currentStaff.fullName,
@@ -362,7 +396,7 @@ export function MessagesWorkspace() {
   }
 
   return (
-    <div className="page-container" style={{ padding: "16px 24px" }}>
+    <div className="page-container messages-page">
       <div className="messenger-container">
         {/* =========================================================================
             PANE 1: LEFT CHATS SIDEBAR (MESSENGER STYLE)
@@ -373,6 +407,7 @@ export function MessagesWorkspace() {
             <div className="messenger-header-top">
               <h2 className="messenger-title">Chats</h2>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <button type="button" className={`messenger-icon-btn ${alertsEnabled?"alerts-ready":""}`} onClick={()=>void enableAlerts()} title={alertsEnabled?"Message and call alerts enabled":"Enable message and call alerts"}><Bell size={16}/></button>
                 <button
                   type="button"
                   className="messenger-icon-btn"
@@ -552,23 +587,14 @@ export function MessagesWorkspace() {
             </div>
 
             <div className="messenger-header-actions">
-              <button
+              {activeRecipientId&&<button
                 type="button"
                 className="messenger-icon-btn"
                 onClick={handleStartVoiceCall}
-                title="Start Encrypted Voice Call"
+                title="Start voice call"
               >
                 <Phone size={17} style={{ color: "#F97316" }} />
-              </button>
-
-              <button
-                type="button"
-                className="messenger-icon-btn"
-                onClick={handleStartVideoCall}
-                title="Start HD Video Conference"
-              >
-                <Video size={18} style={{ color: "#F97316" }} />
-              </button>
+              </button>}
 
               <button
                 type="button"
@@ -623,6 +649,10 @@ export function MessagesWorkspace() {
                   )}
 
                   <div className="messenger-bubble">
+                    <div className="messenger-message-meta">
+                      <strong>{isOutgoing ? "You" : msg.senderName}</strong>
+                      <span>{msg.timestamp}</span>
+                    </div>
                     {/* Clickable Student Tag Case */}
                     {msg.taggedStudentCode && (
                       <div
@@ -706,6 +736,9 @@ export function MessagesWorkspace() {
                       ))}
                     </div>
                   </div>
+                  {isOutgoing && msg.id === latestOutgoingId && msg.readAt && (
+                    <div className="messenger-seen-status"><CheckCheck size={12}/>{formatSeenStatus(msg.readAt)}</div>
+                  )}
                 </div>
               );
             })}
@@ -867,6 +900,11 @@ export function MessagesWorkspace() {
                   ● {currentRecipient?.presence === "ONLINE" ? "Active Now" : "Away"}
                 </span>
 
+                <div className="messenger-profile-actions">
+                  <button type="button" onClick={handleStartVoiceCall}><Phone size={15}/><span>Call</span></button>
+                  <a href={`mailto:${currentRecipient?.email ?? ""}`}><MessageSquare size={15}/><span>Email</span></a>
+                </div>
+
                 <div style={{ marginTop: "20px", width: "100%", display: "flex", flexDirection: "column", gap: "10px", fontSize: "12px", textAlign: "left" }}>
                   <div style={{ padding: "10px", background: "var(--bg-card-subtle)", borderRadius: "8px" }}>
                     <span style={{ color: "var(--text-muted)", display: "block", fontSize: "10px", textTransform: "uppercase" }}>Department</span>
@@ -902,6 +940,21 @@ export function MessagesWorkspace() {
                     <span>Visa Applications</span>
                   </button>
                 </div>
+
+                <section className="messenger-attachment-panel">
+                  <header><div><FileText size={15}/><strong>Attachments</strong></div><span>{conversationAttachments.length}</span></header>
+                  {conversationAttachments.length ? (
+                    <div className="messenger-attachment-list">
+                      {conversationAttachments.map(attachment => (
+                        <a key={attachment.key} href={attachment.url || undefined} aria-disabled={!attachment.url} onClick={event=>{if(!attachment.url)event.preventDefault()}}>
+                          <span className="messenger-file-icon"><FileText size={16}/></span>
+                          <span><strong>{attachment.name}</strong><small>{attachment.size} · {attachment.senderName}</small></span>
+                          {attachment.url ? <Download size={14}/> : null}
+                        </a>
+                      ))}
+                    </div>
+                  ) : <p>No files shared in this conversation.</p>}
+                </section>
               </div>
             ) : (
               <div style={{ textAlign: "left" }}>

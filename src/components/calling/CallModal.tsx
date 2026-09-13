@@ -1,7 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Camera,
-  CameraOff,
   ChevronRight,
   ExternalLink,
   Info,
@@ -9,7 +7,6 @@ import {
   Mic,
   MicOff,
   Minimize2,
-  MonitorUp,
   Phone,
   PhoneOff,
   Send,
@@ -18,8 +15,6 @@ import {
   Sparkles,
   User,
   Users,
-  Video,
-  VideoOff,
   Volume2,
   VolumeX,
   X,
@@ -74,8 +69,6 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
   const [callStatus, setCallStatus] = useState<CallStatus>(session.status);
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(session.callType === "audio");
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [showChatDrawer, setShowChatDrawer] = useState(false);
@@ -83,8 +76,6 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
   const [chatInput, setChatInput] = useState("");
   const [audioLevel, setAudioLevel] = useState<number>(0);
 
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
   // Attach remote stream to HTML media elements
@@ -92,10 +83,6 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = stream;
       remoteAudioRef.current.play().catch(e => console.warn("Audio autoplay:", e));
-    }
-    if (remoteVideoRef.current && session.callType === "video") {
-      remoteVideoRef.current.srcObject = stream;
-      remoteVideoRef.current.play().catch(e => console.warn("Video autoplay:", e));
     }
   };
 
@@ -107,9 +94,6 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
 
     if (CallingService.remoteStream) {
       attachRemoteStream(CallingService.remoteStream);
-    }
-    if (CallingService.localStream && localVideoRef.current && session.callType === "video") {
-      localVideoRef.current.srcObject = CallingService.localStream;
     }
 
     return () => {
@@ -123,10 +107,8 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
 
     const handleSync = async () => {
       try {
-        const res = await fetch("/api/sync/call/status");
-        if (res.ok) {
-          const activeCalls = await res.json();
-          const current: ActiveCallSession = activeCalls[session.callId];
+        const current = await CallingService.getCall(session.callId);
+        if(current&&["ENDED","DECLINED","BUSY"].includes(current.status)){ringtones.stop();onClose();return}
           if (current) {
             if (current.status === "CONNECTED" && callStatus !== "CONNECTED") {
               ringtones.stop();
@@ -154,7 +136,6 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
               onClose();
             }
           }
-        }
       } catch {}
     };
 
@@ -176,6 +157,15 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
     return () => clearInterval(timer);
   }, [callStatus]);
 
+  // Ring for one minute, matching a normal phone experience, then record a missed call.
+  useEffect(() => {
+    if (callStatus !== "RINGING") return;
+    const timeout = window.setTimeout(() => {
+      void CallingService.endCall(session.callId, currentUserId, "missed").finally(onClose);
+    }, Math.max(0, 60_000 - (Date.now() - session.startedAt)));
+    return () => window.clearTimeout(timeout);
+  }, [callStatus, currentUserId, onClose, session.callId, session.startedAt]);
+
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -188,29 +178,6 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
     CallingService.setAudioEnabled(!next);
   };
 
-  const handleToggleVideo = () => {
-    const next = !isVideoOff;
-    setIsVideoOff(next);
-    CallingService.setVideoEnabled(!next);
-  };
-
-  const handleToggleScreenShare = async () => {
-    if (!isScreenSharing) {
-      const stream = await CallingService.startScreenShare();
-      if (stream) {
-        setIsScreenSharing(true);
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-      }
-    } else {
-      await CallingService.stopScreenShare();
-      setIsScreenSharing(false);
-      if (localVideoRef.current && CallingService.localStream) {
-        localVideoRef.current.srcObject = CallingService.localStream;
-      }
-    }
-  };
 
   const handleSendInCallMessage = () => {
     if (!chatInput.trim()) return;
@@ -323,8 +290,8 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
         <div className="call-header-bar">
           <div className="call-header-left">
             <div className="call-type-badge">
-              {session.callType === "audio" ? <Phone size={13} /> : <Video size={13} />}
-              <span>AECS Enterprise HD Conference</span>
+              <Phone size={13} />
+              <span>AECS staff voice call</span>
             </div>
             <span style={{ fontSize: "11.5px", color: "#10B981", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
               <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10B981" }} />
@@ -383,7 +350,7 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
               </div>
 
               <div style={{ marginTop: "16px", fontSize: "13px", color: "#F59E0B", fontWeight: 600 }}>
-                Ringing colleague on Kathmandu LAN…
+                Ringing colleague…
               </div>
 
               {/* Ringing Cancel Button */}
@@ -402,25 +369,10 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
           ) : (
             /* Connected: Native Dual-Grid Zoom-grade Conference Stage */
             <div style={{ width: "100%", height: "100%", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {/* Remote Video Track (if camera active) */}
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  display: session.callType === "video" && !isVideoOff ? "block" : "none",
-                }}
-              />
-
-              {/* Avatar Stage (Audio Call or Video off) */}
+              {/* Voice-call participant stage */}
               <div
                 className="call-profile-stage"
-                style={{
-                  display: session.callType === "video" && !isVideoOff ? "none" : "flex",
-                }}
+                style={{display:"flex"}}
               >
                 <div
                   className="call-avatar-pulse"
@@ -465,46 +417,6 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
                 </div>
               </div>
 
-              {/* Local PiP Video Preview */}
-              {session.callType === "video" && (
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: "16px",
-                    right: "16px",
-                    width: "180px",
-                    height: "120px",
-                    borderRadius: "12px",
-                    overflow: "hidden",
-                    border: "2px solid rgba(251, 146, 60, 0.5)",
-                    background: "#1E293B",
-                    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.6)",
-                    zIndex: 10,
-                  }}
-                >
-                  <video
-                    ref={localVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: "4px",
-                      left: "6px",
-                      fontSize: "10px",
-                      background: "rgba(0,0,0,0.6)",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      color: "#FFF",
-                    }}
-                  >
-                    You {isMuted ? "(Muted)" : ""}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -654,29 +566,6 @@ export function CallModal({ session, currentUserId, onClose }: CallModalProps) {
               <span>{isMuted ? "Unmute" : "Mute"}</span>
             </button>
 
-            {/* Camera Toggle */}
-            {session.callType === "video" && (
-              <button
-                type="button"
-                className={`call-btn call-btn-control ${isVideoOff ? "active-off" : ""}`}
-                onClick={handleToggleVideo}
-                title={isVideoOff ? "Turn Camera On" : "Turn Camera Off"}
-              >
-                {isVideoOff ? <VideoOff size={16} /> : <Video size={16} />}
-                <span>{isVideoOff ? "Start Video" : "Stop Video"}</span>
-              </button>
-            )}
-
-            {/* Screen Share */}
-            <button
-              type="button"
-              className={`call-btn call-btn-control ${isScreenSharing ? "active-off" : ""}`}
-              onClick={handleToggleScreenShare}
-              title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
-            >
-              <MonitorUp size={16} />
-              <span>{isScreenSharing ? "Stop Share" : "Share Screen"}</span>
-            </button>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
