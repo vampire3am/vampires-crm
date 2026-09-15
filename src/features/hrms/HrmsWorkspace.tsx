@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
@@ -33,7 +33,7 @@ import { LeaveAllocationPicker, type LeaveAllocation } from "../../components/ui
 import { HrmsService } from "../../services/hrmsService";
 import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 import { useAuth } from "../auth/AuthProvider";
-import { bsMonthToAdRange, formatBsDate, formatBsMonth, todayAd, todayBs } from "../../lib/nepaliDate";
+import { adToBs, bsMonthToAdRange, bsToAd, formatBsDate, formatBsMonth, isValidBsDate, todayAd, todayBs } from "../../lib/nepaliDate";
 import { canAccessHrmsTab, HRMS_TAB_ORDER, type HrmsTab } from "./hrmsAccess";
 
 interface StaffMember {
@@ -72,12 +72,34 @@ interface AttendanceRecord {
   fullName: string;
   attendanceDate: string;
   date: string;
+  clockInAt?: string | null;
   checkIn: string;
   checkOut: string;
   workedHours: string;
   status: "PRESENT" | "LATE" | "HALF_DAY" | "ON_LEAVE" | "ABSENT";
   lateMinutes?: number;
 }
+
+const nepalCalendarDate = (value = new Date()) => new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kathmandu",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+}).format(value);
+
+const attendanceDayLabel = (date: string, today: string) => {
+  const yesterday = nepalCalendarDate(new Date(new Date(`${today}T12:00:00+05:45`).getTime() - 86_400_000));
+  const dayBefore = nepalCalendarDate(new Date(new Date(`${today}T12:00:00+05:45`).getTime() - 172_800_000));
+  if (date === today) return "Today";
+  if (date === yesterday) return "Yesterday";
+  if (date === dayBefore) return "The day before yesterday";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kathmandu",
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${date}T12:00:00+05:45`));
+};
 
 interface WorkBreakRecord {
   id: string;
@@ -168,6 +190,20 @@ const INITIAL_LEAVES: LeaveRequest[] = [];
 
 const INITIAL_PAYROLL: PayrollRecord[] = [];
 
+function AttendancePicker({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(option => option.value === value);
+  return <div className="attendance-picker" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+    <span className="attendance-picker-label">{label}</span>
+    <button type="button" className={`attendance-picker-trigger ${open ? "open" : ""}`} aria-expanded={open} aria-haspopup="listbox" onClick={() => setOpen(!open)}>
+      <span>{selected?.label ?? "Select date"}</span><ChevronRight size={14}/>
+    </button>
+    {open && <div className="attendance-picker-menu" role="listbox" aria-label={label}>
+      {options.map(option => <button key={option.value} type="button" role="option" aria-selected={option.value === value} className={option.value === value ? "selected" : ""} onClick={() => { onChange(option.value); setOpen(false); }}>{option.label}{option.value === value && <Check size={13}/>}</button>)}
+    </div>}
+  </div>;
+}
+
 export function HrmsWorkspace() {
   const { profile, hasPermission } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -199,6 +235,60 @@ export function HrmsWorkspace() {
 
   const [staffList, setStaffList] = useState<StaffMember[]>(INITIAL_STAFF);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE);
+  const [nepalToday, setNepalToday] = useState(nepalCalendarDate);
+  useEffect(() => {
+    const refreshDay = () => setNepalToday(nepalCalendarDate());
+    const timer = window.setInterval(refreshDay, 60_000);
+    document.addEventListener("visibilitychange", refreshDay);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshDay);
+    };
+  }, []);
+  const [selectedAttendanceMonth, setSelectedAttendanceMonth] = useState<string | null>(null);
+  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState<string | null>(null);
+  const attendanceGroups = useMemo(() => {
+    const groups = new Map<string, AttendanceRecord[]>();
+    for (const record of attendance) groups.set(record.attendanceDate, [...(groups.get(record.attendanceDate) ?? []), record]);
+    return [...groups.entries()]
+      .sort(([dateA], [dateB]) => dateB.localeCompare(dateA))
+      .map(([date, records]) => ({
+        date,
+        label: attendanceDayLabel(date, nepalToday),
+        bsDate: records[0]?.date ?? formatBsDate(date),
+        records: records.sort((a, b) => {
+          if (a.clockInAt && b.clockInAt) return new Date(a.clockInAt).getTime() - new Date(b.clockInAt).getTime();
+          if (a.clockInAt) return -1;
+          if (b.clockInAt) return 1;
+          return a.fullName.localeCompare(b.fullName);
+        }),
+      }));
+  }, [attendance, nepalToday]);
+  const currentBsMonth = adToBs(nepalToday).slice(0, 7);
+  const attendanceMonths = useMemo(() => {
+    const [year, month] = currentBsMonth.split("-").map(Number);
+    const recentMonths = Array.from({ length: 12 }, (_, offset) => {
+      const zeroBasedMonth = year * 12 + month - 1 - offset;
+      return `${Math.floor(zeroBasedMonth / 12)}-${String(zeroBasedMonth % 12 + 1).padStart(2, "0")}`;
+    });
+    return [...new Set([...recentMonths, ...attendanceGroups.map(group => adToBs(group.date).slice(0, 7))])]
+      .sort((a, b) => b.localeCompare(a));
+  }, [attendanceGroups, currentBsMonth]);
+  const activeAttendanceMonth = selectedAttendanceMonth && attendanceMonths.includes(selectedAttendanceMonth)
+    ? selectedAttendanceMonth : currentBsMonth;
+  const attendanceDays = useMemo(() => Array.from({ length: 32 }, (_, index) => `${activeAttendanceMonth}-${String(index + 1).padStart(2, "0")}`)
+    .filter(isValidBsDate)
+    .map(bsDate => ({ bsDate, adDate: bsToAd(bsDate) })), [activeAttendanceMonth]);
+  const latestMonthRecord = attendanceGroups.find(group => adToBs(group.date).slice(0, 7) === activeAttendanceMonth);
+  const defaultAttendanceDate = activeAttendanceMonth === currentBsMonth ? nepalToday : latestMonthRecord?.date ?? attendanceDays.at(-1)?.adDate;
+  const activeAttendanceDate = selectedAttendanceDate && attendanceDays.some(day => day.adDate === selectedAttendanceDate)
+    ? selectedAttendanceDate : defaultAttendanceDate;
+  const selectedAttendanceGroup = attendanceGroups.find(group => group.date === activeAttendanceDate);
+  const quickAttendanceDates = [0, 1, 2].map(offset => {
+    const date = nepalCalendarDate(new Date(new Date(`${nepalToday}T12:00:00+05:45`).getTime() - offset * 86_400_000));
+    const group = attendanceGroups.find(item => item.date === date);
+    return { date, label: attendanceDayLabel(date, nepalToday), bsDate: formatBsDate(date), count: group?.records.length ?? 0 };
+  });
   const [workBreaks, setWorkBreaks] = useState<WorkBreakRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>(INITIAL_LEAVES);
   const [leavePolicies, setLeavePolicies] = useState<LeavePolicy[]>([]);
@@ -736,13 +826,36 @@ export function HrmsWorkspace() {
             <div className="panel-header-actions"><span className="status-pill"><Clock size={13} style={{ color: "var(--accent-blue)" }} /><span>Live employee register</span></span><button type="button" className="btn-secondary" onClick={()=>setShowCorrectionModal(true)}>Request correction</button>{canManageHr&&<button type="button" className="btn-primary" onClick={()=>setShowShiftModal(true)}>Assign shift</button>}</div>
           </div>
 
+          <div className="attendance-date-controls">
+            <div className="attendance-date-tabs" role="tablist" aria-label="Recent attendance dates">
+            {quickAttendanceDates.map(day => <button
+              key={day.date}
+              type="button"
+              role="tab"
+              aria-selected={activeAttendanceDate === day.date}
+              className={`attendance-date-tab ${activeAttendanceDate === day.date ? "active" : ""}`}
+              onClick={() => {
+                setSelectedAttendanceMonth(adToBs(day.date).slice(0, 7));
+                setSelectedAttendanceDate(day.date);
+              }}
+            >
+              <span>{day.label}</span>
+              <small>{day.bsDate}</small>
+              <b>{day.count}</b>
+            </button>)}
+            </div>
+            <div className="attendance-picker-fields">
+              <AttendancePicker label="BS month" value={activeAttendanceMonth} options={attendanceMonths.map(month => ({ value: month, label: `${formatBsMonth(month)} BS` }))} onChange={value => { setSelectedAttendanceMonth(value); setSelectedAttendanceDate(null); }} />
+              <AttendancePicker label="BS date" value={activeAttendanceDate ?? ""} options={attendanceDays.map(day => ({ value: day.adDate, label: formatBsDate(day.adDate) }))} onChange={setSelectedAttendanceDate} />
+            </div>
+          </div>
+
           <div className="table-wrapper">
             <table className="crm-table">
               <thead>
                 <tr>
                   <th>Emp Code</th>
                   <th>Staff Member</th>
-                  <th>Attendance Date</th>
                   <th>Punch-In Time</th>
                   <th>Punch-Out Time</th>
                   <th>Worked Hours</th>
@@ -751,7 +864,7 @@ export function HrmsWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {attendance.map(att => (
+                {selectedAttendanceGroup?.records.map(att => (
                   <tr key={att.id}>
                     <td>
                       <span className="account-code-cell">{att.empCode}</span>
@@ -759,7 +872,6 @@ export function HrmsWorkspace() {
                     <td>
                       <strong style={{ fontSize: "13px" }}>{att.fullName}</strong>
                     </td>
-                    <td>{att.date}</td>
                     <td>
                       <span className="code-font" style={{ fontWeight: 700, color: "var(--accent-blue)" }}>
                         {att.checkIn}
@@ -783,6 +895,7 @@ export function HrmsWorkspace() {
                     </td>
                   </tr>
                 ))}
+                {!selectedAttendanceGroup?.records.length&&<tr><td colSpan={7} className="employee-table-empty">No attendance records for {activeAttendanceDate ? formatBsDate(activeAttendanceDate) : "this date"}.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1244,7 +1357,7 @@ export function HrmsWorkspace() {
       {/* APPLY LEAVE MODAL */}
       {showLeaveModal && canRequestLeave && (
         <div className="modal-backdrop-clean" onClick={() => setShowLeaveModal(false)}>
-          <div className="modal-dialog-clean" onClick={e => e.stopPropagation()}>
+          <div className="modal-dialog-clean leave-request-dialog" onClick={e => e.stopPropagation()}>
             <div className="modal-header-clean">
               <div>
                 <h3>Apply for Leave</h3>

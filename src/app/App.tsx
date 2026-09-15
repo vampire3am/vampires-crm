@@ -53,6 +53,12 @@ const AdminDashboard = lazy(() =>
 const HrmsWorkspace = lazy(() =>
   import("../features/hrms/HrmsWorkspace").then(m => ({ default: m.HrmsWorkspace }))
 );
+const HrmsSettingsWorkspace = lazy(() =>
+  import("../features/hrms/HrmsSettingsWorkspace").then(m => ({ default: m.HrmsSettingsWorkspace }))
+);
+const HrmsReportsWorkspace = lazy(() =>
+  import("../features/hrms/HrmsReportsWorkspace").then(m => ({ default: m.HrmsReportsWorkspace }))
+);
 const LeadsWorkspace = lazy(() =>
   import("../features/leads/LeadsWorkspace").then(m => ({ default: m.LeadsWorkspace }))
 );
@@ -258,6 +264,22 @@ export default function App() {
               element={
                 <RoleRouteGuard permission="hrms" workspaceName="HRMS & Staff Management">
                   <HrmsWorkspace />
+                </RoleRouteGuard>
+              }
+            />
+            <Route
+              path="/hrms/settings"
+              element={
+                <RoleRouteGuard permission="settings" workspaceName="HRMS Settings">
+                  <HrmsSettingsWorkspace />
+                </RoleRouteGuard>
+              }
+            />
+            <Route
+              path="/hrms/reports"
+              element={
+                <RoleRouteGuard permission="reports" workspaceName="HRMS Reports">
+                  <HrmsReportsWorkspace />
                 </RoleRouteGuard>
               }
             />

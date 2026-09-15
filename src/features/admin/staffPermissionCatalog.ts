@@ -72,6 +72,9 @@ export const STAFF_PERMISSION_GROUPS: PermissionGroup[] = [
     { key: "performance.view", label: "View authorized performance records" },
     { key: "performance.manage", label: "Assign targets and record reviews" },
     { key: "hr.documents.manage", label: "Manage confidential employee documents" },
+    { key: "hr.settings.manage", label: "Manage HRMS master data and effective-dated policies" },
+    { key: "hr.reports.view", label: "View the nine HRMS report groups" },
+    { key: "hr.reports.export", label: "Export HRMS reports" },
   ]},
   { id: "payroll", label: "Payroll", module: "hrms", permissions: [
     { key: "payroll.view", label: "View payroll register and payslips" },

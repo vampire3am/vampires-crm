@@ -18,6 +18,7 @@ export interface ChatAttachment {
   size: string;
   type: "pdf" | "image" | "doc" | "archive";
   url?: string;
+  path?: string;
 }
 
 export interface MessageReaction {
@@ -36,12 +37,15 @@ export interface ChatMessage {
   recipientId?: string;
   content: string;
   timestamp: string;
+  createdAt: string;
   taggedStudentCode?: string;
   taggedStudentName?: string;
   attachments?: ChatAttachment[];
     reactions?: MessageReaction[];
   isPinned?: boolean;
   readAt?: string;
+  isReadByCurrentUser?: boolean;
+  readCount?: number;
 }
 
 export interface ChatChannel {
@@ -57,6 +61,30 @@ export interface ChatChannel {
 }
 
 export const MessagingService = {
+  uploadAttachment: async (file: File): Promise<ChatAttachment> => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error("Sign in again before attaching a file.");
+    if (file.size > 20 * 1024 * 1024) throw new Error("Attachments must be 20 MB or smaller.");
+    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
+    if (!allowed.includes(file.type)) throw new Error("Use a PDF, image, Word document, or text file.");
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${user.id}/${generateUuid()}-${safeName}`;
+    const { error } = await supabase.storage.from("crm-message-attachments").upload(path, file, { contentType: file.type, upsert: false });
+    if (error) throw error;
+    return { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} KB`, type: file.type.startsWith("image/") ? "image" : file.type === "application/pdf" ? "pdf" : "doc", path };
+  },
+  removeAttachments: async (paths: string[]): Promise<void> => {
+    if (paths.length) await supabase.storage.from("crm-message-attachments").remove(paths);
+  },
+  attachmentUrl: async (attachment: ChatAttachment): Promise<string> => {
+    if (attachment.path) {
+      const { data, error } = await supabase.storage.from("crm-message-attachments").createSignedUrl(attachment.path, 120);
+      if (error) throw error;
+      return data.signedUrl;
+    }
+    if (attachment.url) return attachment.url;
+    throw new Error("This older attachment does not have a stored file.");
+  },
   getUnreadCount: async ():Promise<number> => {const{data,error}=await supabase.rpc("get_unread_message_count");if(error)throw error;return Number(data??0)},
   markAllRead: async ():Promise<void> => {const{error}=await supabase.rpc("mark_all_messages_read");if(error)throw error;window.dispatchEvent(new CustomEvent("aecs:message-read-state"))},
   markConversationRead: async (target:{recipientId?:string;channelId?:string}):Promise<void> => {const{error}=await supabase.rpc("mark_conversation_messages_read",{other_staff_uuid:target.recipientId??null,channel_uuid:target.channelId??null});if(error)throw error;window.dispatchEvent(new CustomEvent("aecs:message-read-state"))},
@@ -64,11 +92,23 @@ export const MessagingService = {
   getChannels: async ():Promise<ChatChannel[]> => {const{data,error}=await supabase.from("communication_channels").select("id,name,description,category,is_private,communication_channel_members(count)").order("name");if(error)throw error;return(data??[]).map(c=>({id:c.id,name:c.name,description:c.description??"",topic:c.description??"",category:c.category==="BROADCAST"?"Broadcast":c.category==="CASE"?"Admissions":"Department",iconName:c.category==="BROADCAST"?"Megaphone":"Users",isPrivate:c.is_private,memberCount:c.communication_channel_members?.[0]?.count??0,unreadCount:0}))},
   createStaffGroup:async(payload:{name:string;description:string;memberIds:string[]}):Promise<string>=>{const{data,error}=await supabase.rpc("create_staff_group",{payload:{name:payload.name,description:payload.description,member_ids:payload.memberIds}});if(error)throw error;return String(data)},
   getMessages: async (): Promise<ChatMessage[]> => {
-    const{data,error}=await supabase.from("communication_messages").select("*,sender:staff_profiles!communication_messages_sender_id_fkey(full_name,role,avatar_bg),students(student_code,full_name),communication_reactions(emoji,staff_profiles(full_name)),communication_message_reads(read_at,staff_id)").order("created_at");if(error)throw error;return(data??[]).map(m=>{const grouped=new Map<string,string[]>();for(const r of m.communication_reactions??[]){grouped.set(r.emoji,[...(grouped.get(r.emoji)??[]),r.staff_profiles?.full_name??"Staff"])}const recipientRead=(m.communication_message_reads??[]).find((r:any)=>r.staff_id===m.recipient_id);return{id:m.id,senderId:m.sender_id,senderName:m.sender?.full_name??"Staff",senderRole:m.sender?.role??"Staff",senderAvatarBg:m.sender?.avatar_bg??"#F97316",channelId:m.channel_id??undefined,recipientId:m.recipient_id??undefined,content:m.content,timestamp:new Date(m.created_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}),taggedStudentCode:m.students?.student_code,taggedStudentName:m.students?.full_name,attachments:m.attachments as ChatAttachment[],reactions:[...grouped].map(([emoji,users])=>({emoji,count:users.length,users})),isPinned:m.is_pinned,readAt:recipientRead?.read_at??undefined}});
+    const [{data,error},{data:{user}}]=await Promise.all([
+      supabase.from("communication_messages").select("*,sender:staff_profiles!communication_messages_sender_id_fkey(full_name,role,avatar_bg),students(student_code,full_name),communication_reactions(emoji,staff_profiles(full_name)),communication_message_reads(read_at,staff_id)").order("created_at", { ascending: false }).limit(1000),
+      supabase.auth.getUser(),
+    ]);
+    if(error)throw error;
+    return[...(data??[])].reverse().map(m=>{
+      const grouped=new Map<string,string[]>();
+      for(const r of m.communication_reactions??[]){grouped.set(r.emoji,[...(grouped.get(r.emoji)??[]),r.staff_profiles?.full_name??"Staff"])}
+      const reads=(m.communication_message_reads??[]) as Array<{read_at:string;staff_id:string}>;
+      const recipientRead=reads.find(r=>r.staff_id===m.recipient_id);
+      const currentUserRead=reads.some(r=>r.staff_id===user?.id);
+      return{id:m.id,senderId:m.sender_id,senderName:m.sender?.full_name??"Staff",senderRole:m.sender?.role??"Staff",senderAvatarBg:m.sender?.avatar_bg??"#F97316",channelId:m.channel_id??undefined,recipientId:m.recipient_id??undefined,content:m.content,createdAt:m.created_at,timestamp:new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Kathmandu",hour:"numeric",minute:"2-digit",hour12:true}).format(new Date(m.created_at)),taggedStudentCode:m.students?.student_code,taggedStudentName:m.students?.full_name,attachments:m.attachments as ChatAttachment[],reactions:[...grouped].map(([emoji,users])=>({emoji,count:users.length,users})),isPinned:m.is_pinned,readAt:recipientRead?.read_at??reads[0]?.read_at??undefined,isReadByCurrentUser:currentUserRead,readCount:reads.length};
+    });
   },
 
-  sendMessage: async (messagePayload: Omit<ChatMessage, "id" | "timestamp">): Promise<ChatMessage> => {
-    const{data,error}=await supabase.rpc("send_internal_message",{payload:{recipient_id:messagePayload.recipientId??"",channel_id:messagePayload.channelId??"",content:messagePayload.content,attachments:messagePayload.attachments??[]}});if(error)throw error;const current=await MessagingService.getMessages();const created=current.find(m=>m.id===data);if(!created)throw new Error("Message was created but could not be reloaded");return created;
+  sendMessage: async (messagePayload: Omit<ChatMessage, "id" | "timestamp" | "createdAt">): Promise<ChatMessage> => {
+    const{data,error}=await supabase.rpc("send_internal_message",{payload:{recipient_id:messagePayload.recipientId??"",channel_id:messagePayload.channelId??"",content:messagePayload.content,attachments:messagePayload.attachments??[]}});if(error)throw error;return { ...messagePayload, id: String(data), createdAt: new Date().toISOString(), timestamp: "Now" };
   },
 
   toggleReaction: async (messageId: string, emoji: string, currentUserName: string): Promise<ChatMessage[]> => {

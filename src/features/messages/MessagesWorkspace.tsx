@@ -87,6 +87,15 @@ import { CallModal } from "../../components/calling/CallModal";
 import { notifyError } from "../../components/common/CrmNotifications";
 
 const QUICK_REACTION_EMOJIS = ["👍", "❤️", "😆", "😮", "😢", "🔥"];
+const messageDay = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kathmandu", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+const messageDateLabel = (createdAt: string, includeTime = false) => {
+  const date = new Date(createdAt);
+  const today = messageDay(new Date());
+  const yesterday = messageDay(new Date(Date.now() - 86_400_000));
+  const day = messageDay(date);
+  const label = day === today ? "Today" : day === yesterday ? "Yesterday" : new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kathmandu", day: "numeric", month: "short", year: day.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric" }).format(date);
+  return includeTime ? `${label} · ${new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Kathmandu", hour: "numeric", minute: "2-digit", hour12: true }).format(date)}` : label;
+};
 const formatSeenStatus = (readAt: string) => {
   const elapsed = Math.max(0, Date.now() - new Date(readAt).getTime());
   const minutes = Math.floor(elapsed / 60_000);
@@ -147,7 +156,9 @@ export function MessagesWorkspace() {
   const [groupSaving,setGroupSaving]=useState(false);
   const [groupError,setGroupError]=useState("");
   const [selectedStudentTag, setSelectedStudentTag] = useState<{ code: string; name: string } | null>(null);
-  const [stagedAttachments, setStagedAttachments] = useState<ChatAttachment[]>([]);
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showInfoSidebar, setShowInfoSidebar] = useState(true);
   const [showEmojiTray, setShowEmojiTray] = useState(false);
   const [outgoingCallSession, setOutgoingCallSession] = useState<ActiveCallSession | null>(null);
@@ -224,8 +235,10 @@ export function MessagesWorkspace() {
   useEffect(() => {
     loadMessages();
     const unsubscribe = MessagingService.subscribeToSyncEvents(loadMessages);
+    const fallbackRefresh = window.setInterval(() => { if (!document.hidden) void loadMessages(); }, 15_000);
     return () => {
       unsubscribe();
+      window.clearInterval(fallbackRefresh);
     };
   }, []);
 
@@ -277,7 +290,7 @@ export function MessagesWorkspace() {
     void MessagingService.markConversationRead({
       recipientId: activeRecipientId ?? undefined,
       channelId: activeChannelId ?? undefined,
-    }).catch(() => {});
+    }).then(loadMessages).catch(() => {});
   }, [activeRecipientId, activeChannelId, latestIncomingId]);
 
   const conversationAttachments = useMemo(
@@ -303,7 +316,7 @@ export function MessagesWorkspace() {
           (m.senderId === u.id && m.recipientId === currentUserId)
       );
       summaries[u.id] = {
-        lastMsg: msgs.length > 0 ? msgs[msgs.length - 1] : null,
+        lastMsg: msgs.length > 0 ? msgs.reduce((latest, message) => message.createdAt > latest.createdAt ? message : latest) : null,
         count: msgs.filter(message => message.senderId === u.id && message.recipientId === currentUserId && !message.readAt).length,
       };
     }
@@ -311,8 +324,8 @@ export function MessagesWorkspace() {
     for (const ch of channels) {
       const msgs = messages.filter(m => m.channelId === ch.id);
       summaries[ch.id] = {
-        lastMsg: msgs.length > 0 ? msgs[msgs.length - 1] : null,
-        count: msgs.length,
+        lastMsg: msgs.length > 0 ? msgs.reduce((latest, message) => message.createdAt > latest.createdAt ? message : latest) : null,
+        count: msgs.filter(message => message.senderId !== currentUserId && !message.isReadByCurrentUser).length,
       };
     }
 
@@ -342,15 +355,43 @@ export function MessagesWorkspace() {
       const summaryB = conversationSummaries[b.id];
       if (summaryA?.lastMsg && !summaryB?.lastMsg) return -1;
       if (!summaryA?.lastMsg && summaryB?.lastMsg) return 1;
-      return 0;
+      if (summaryA?.lastMsg && summaryB?.lastMsg) {
+        return new Date(summaryB.lastMsg.createdAt).getTime() - new Date(summaryA.lastMsg.createdAt).getTime();
+      }
+      return a.fullName.localeCompare(b.fullName);
     });
   }, [filteredStaffList, conversationSummaries]);
+  const sortedChannels = useMemo(() => [...channels].sort((a, b) => {
+    const recentA = conversationSummaries[a.id]?.lastMsg?.createdAt;
+    const recentB = conversationSummaries[b.id]?.lastMsg?.createdAt;
+    if (recentA && recentB) return recentB.localeCompare(recentA);
+    if (recentA) return -1;
+    if (recentB) return 1;
+    return a.name.localeCompare(b.name);
+  }), [channels, conversationSummaries]);
+
+  const stageFiles = (files: FileList | null) => {
+    if (!files) return;
+    const next = [...files];
+    if (stagedFiles.length + next.length > 5) { notifyError("Too many attachments", "Attach up to five files per message."); return; }
+    const invalid = next.find(file => file.size > 20 * 1024 * 1024);
+    if (invalid) { notifyError("File too large", `${invalid.name} exceeds 20 MB.`); return; }
+    setStagedFiles(current => [...current, ...next]);
+  };
+  const openAttachment = async (attachment: ChatAttachment) => {
+    try { window.open(await MessagingService.attachmentUrl(attachment), "_blank", "noopener,noreferrer"); }
+    catch (error) { notifyError("Cannot open attachment", error instanceof Error ? error.message : "The file is unavailable."); }
+  };
 
   // Send message
   const handleSendMessage = async (customText?: string) => {
     const textToSend = customText !== undefined ? customText : inputText;
-    if (!textToSend.trim() && stagedAttachments.length === 0) return;
-
+    if (sendingMessage || (!textToSend.trim() && stagedFiles.length === 0)) return;
+    setSendingMessage(true);
+    const uploaded: ChatAttachment[] = [];
+    let committed = false;
+    try {
+    for (const file of stagedFiles) uploaded.push(await MessagingService.uploadAttachment(file));
     await MessagingService.sendMessage({
       senderId: currentUserId,
       senderName: currentStaff.fullName,
@@ -358,16 +399,21 @@ export function MessagesWorkspace() {
       senderAvatarBg: currentStaff.avatarBg || "#F97316",
       channelId: activeChannelId || undefined,
       recipientId: activeRecipientId || undefined,
-      content: textToSend.trim(),
+      content: textToSend.trim() || `📎 ${stagedFiles.map(file => file.name).join(", ")}`,
       taggedStudentCode: selectedStudentTag?.code,
       taggedStudentName: selectedStudentTag?.name,
-      attachments: stagedAttachments.length > 0 ? stagedAttachments : undefined,
+      attachments: uploaded.length > 0 ? uploaded : undefined,
     });
+    committed = true;
 
     setInputText("");
     setSelectedStudentTag(null);
-    setStagedAttachments([]);
+    setStagedFiles([]);
     await loadMessages();
+    } catch (error) {
+      if (!committed) await MessagingService.removeAttachments(uploaded.map(item => item.path!).filter(Boolean));
+      notifyError("Message not sent", error instanceof Error ? error.message : "Please try again.");
+    } finally { setSendingMessage(false); }
   };
 
   // Quick Like (Thumbs Up)
@@ -455,7 +501,7 @@ export function MessagesWorkspace() {
           <div className="messenger-chat-list">
             {sidebarFilter === "channels" ? (
               /* Channel Rooms */
-              channels.map(ch => {
+              sortedChannels.map(ch => {
                 const isActive = activeChannelId === ch.id;
                 const summary = conversationSummaries[ch.id];
 
@@ -479,7 +525,7 @@ export function MessagesWorkspace() {
                       <div className="messenger-chat-top-line">
                         <span className="messenger-chat-name">#{ch.name}</span>
                         {summary?.lastMsg && (
-                          <span className="messenger-chat-time">{summary.lastMsg.timestamp}</span>
+                          <span className="messenger-chat-time">{messageDateLabel(summary.lastMsg.createdAt)}</span>
                         )}
                       </div>
                       <div className="messenger-chat-preview-line">
@@ -519,7 +565,7 @@ export function MessagesWorkspace() {
                       <div className="messenger-chat-top-line">
                         <span className="messenger-chat-name">{staff.fullName}</span>
                         {summary?.lastMsg && (
-                          <span className="messenger-chat-time">{summary.lastMsg.timestamp}</span>
+                          <span className="messenger-chat-time">{messageDateLabel(summary.lastMsg.createdAt)}</span>
                         )}
                       </div>
                       <div className="messenger-chat-preview-line">
@@ -651,7 +697,7 @@ export function MessagesWorkspace() {
                   <div className="messenger-bubble">
                     <div className="messenger-message-meta">
                       <strong>{isOutgoing ? "You" : msg.senderName}</strong>
-                      <span>{msg.timestamp}</span>
+                      <span>{messageDateLabel(msg.createdAt, true)}</span>
                     </div>
                     {/* Clickable Student Tag Case */}
                     {msg.taggedStudentCode && (
@@ -701,7 +747,7 @@ export function MessagesWorkspace() {
                               <strong style={{ display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{att.name}</strong>
                               <span style={{ fontSize: "10px", opacity: 0.8 }}>{att.size}</span>
                             </div>
-                            <Download size={13} style={{ cursor: "pointer" }} />
+                            <button type="button" onClick={() => void openAttachment(att)} title={`Open ${att.name}`} aria-label={`Open ${att.name}`} className="messenger-file-open"><Download size={13} /></button>
                           </div>
                         ))}
                       </div>
@@ -737,7 +783,7 @@ export function MessagesWorkspace() {
                     </div>
                   </div>
                   {isOutgoing && msg.id === latestOutgoingId && msg.readAt && (
-                    <div className="messenger-seen-status"><CheckCheck size={12}/>{formatSeenStatus(msg.readAt)}</div>
+                    <div className="messenger-seen-status"><CheckCheck size={12}/>{activeChannelId ? `Seen by ${msg.readCount ?? 0}` : formatSeenStatus(msg.readAt)}</div>
                   )}
                 </div>
               );
@@ -745,7 +791,7 @@ export function MessagesWorkspace() {
           </div>
 
           {/* Staged Attachments Preview Above Input */}
-          {(selectedStudentTag || stagedAttachments.length > 0) && (
+          {(selectedStudentTag || stagedFiles.length > 0) && (
             <div
               style={{
                 padding: "8px 18px",
@@ -777,7 +823,7 @@ export function MessagesWorkspace() {
                 </div>
               )}
 
-              {stagedAttachments.map((att, idx) => (
+              {stagedFiles.map((att, idx) => (
                 <div
                   key={idx}
                   style={{
@@ -796,7 +842,7 @@ export function MessagesWorkspace() {
                   <X
                     size={12}
                     style={{ cursor: "pointer" }}
-                    onClick={() => setStagedAttachments(stagedAttachments.filter((_, i) => i !== idx))}
+                  onClick={() => setStagedFiles(stagedFiles.filter((_, i) => i !== idx))}
                   />
                 </div>
               ))}
@@ -816,12 +862,13 @@ export function MessagesWorkspace() {
                 <Plus size={18} />
               </button>
 
+              <input ref={fileInputRef} type="file" hidden multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.txt" onChange={event => { stageFiles(event.target.files); event.target.value = ""; }} />
               {/* Attach Document */}
               <button
                 type="button"
                 className="messenger-action-icon-btn"
-                disabled
-                title="File attachments will be available after storage is configured"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach files"
               >
                 <Paperclip size={18} />
               </button>
@@ -830,8 +877,8 @@ export function MessagesWorkspace() {
               <button
                 type="button"
                 className="messenger-action-icon-btn"
-                disabled
-                title="Image attachments will be available after storage is configured"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach images"
               >
                 <ImageIcon size={18} />
               </button>
@@ -859,11 +906,12 @@ export function MessagesWorkspace() {
             </div>
 
             {/* Giant Blue Thumbs Up OR Send Button */}
-            {inputText.trim() || stagedAttachments.length > 0 ? (
+            {inputText.trim() || stagedFiles.length > 0 ? (
               <button
                 type="button"
                 className="messenger-send-btn"
                 onClick={() => handleSendMessage()}
+                disabled={sendingMessage}
                 title="Send Message"
               >
                 <Send size={18} />
@@ -946,11 +994,11 @@ export function MessagesWorkspace() {
                   {conversationAttachments.length ? (
                     <div className="messenger-attachment-list">
                       {conversationAttachments.map(attachment => (
-                        <a key={attachment.key} href={attachment.url || undefined} aria-disabled={!attachment.url} onClick={event=>{if(!attachment.url)event.preventDefault()}}>
+                        <button key={attachment.key} type="button" onClick={() => void openAttachment(attachment)}>
                           <span className="messenger-file-icon"><FileText size={16}/></span>
                           <span><strong>{attachment.name}</strong><small>{attachment.size} · {attachment.senderName}</small></span>
-                          {attachment.url ? <Download size={14}/> : null}
-                        </a>
+                          <Download size={14}/>
+                        </button>
                       ))}
                     </div>
                   ) : <p>No files shared in this conversation.</p>}

@@ -58,6 +58,8 @@ const SEARCH_ITEMS = [
   { label: "HRMS & Staff Operations", detail: "Employee master, attendance clock-in, leaves & payroll", to: "/hrms", icon: UserCheck },
   { label: "HRMS - Payroll Register", detail: "Monthly salary disbursement, SSF & 1% TDS", to: "/hrms?tab=payroll", icon: Wallet },
   { label: "HRMS - Attendance Clock-In", detail: "Biometric and daily punch-in log", to: "/hrms?tab=attendance", icon: Clock },
+  { label: "HRMS Reports Centre", detail: "Employee, attendance, leave, payroll, salary, performance, KPI, appraisal and workforce reports", to: "/hrms/reports", icon: BarChart3 },
+  { label: "HRMS Settings Centre", detail: "Departments, policies, payroll, tax, documents, approvals and notifications", to: "/hrms/settings", icon: Settings },
   { label: "Team Messages Hub", detail: "Private staff messaging, channels & calling", to: "/messages", icon: MessageSquare },
   { label: "Email Automation & Drips", detail: "Automated student lifecycle notifications & intake auto-responders", to: "/email-automation", icon: Mail },
   { label: "Live CRM Reports", detail: "Generate reports from current operational records", to: "/analytics", icon: BarChart3 },
@@ -77,6 +79,8 @@ const SEARCH_PERMISSION_BY_PATH: Record<string, keyof RolePermissions> = {
   mocks: "mocks",
   documents: "documents",
   hrms: "hrms",
+  "hrms/settings": "settings",
+  "hrms/reports": "hrms",
   messages: "messages",
   "email-automation": "settings",
   analytics: "reports",
@@ -454,6 +458,20 @@ export function AppShell() {
                     >
                       <FileText size={14} />
                       <span>HR Documents</span>
+                    </NavLink>}
+                    {hasPermission("hr.reports.view") && <NavLink
+                      to="/hrms/reports"
+                      className={({ isActive }) => (isActive && location.pathname==="/hrms/reports" ? "sidebar-sublink active" : "sidebar-sublink")}
+                    >
+                      <BarChart3 size={14} />
+                      <span>HRMS Reports</span>
+                    </NavLink>}
+                    {hasPermission("hr.settings.manage") && <NavLink
+                      to="/hrms/settings"
+                      className={({ isActive }) => (isActive && location.pathname==="/hrms/settings" ? "sidebar-sublink active" : "sidebar-sublink")}
+                    >
+                      <Settings size={14} />
+                      <span>HRMS Settings</span>
                     </NavLink>}
                   </div>
                 )}

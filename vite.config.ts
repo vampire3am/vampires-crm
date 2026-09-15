@@ -5,7 +5,10 @@ import fs from "fs";
 import path from "path";
 import nodemailer from "nodemailer";
 
-const enableLocalHttps = process.env.VITE_HTTPS !== "false";
+// Localhost is a secure browser context even over HTTP. Keep the default
+// preview URL predictable; opt in to HTTPS only when testing from another
+// device on the LAN, where microphone access requires a secure origin.
+const enableLocalHttps = process.env.VITE_HTTPS === "true";
 
 function crmSyncPlugin(): Plugin {
   const dataDir = path.resolve(process.cwd(), "data");

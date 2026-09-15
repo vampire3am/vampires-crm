@@ -30,4 +30,6 @@ for(const field of ["date_of_birth","probation_end_date","manager_id","citizensh
 assert.match(employeeWorkspaceSql,/hr_delete_salary_component/);assert.match(employeeWorkspaceSql,/hr_employee_activity/);assert.match(hrmsUi,/EmployeeProfileWorkspace/);assert.match(hrmsUi,/Deductions & statutory withholding/);assert.match(hrmsUi,/Edit every employee field/);
 assert.match(payrollWorkspaceSql,/create table if not exists public\.hr_payroll_reminders/);assert.match(payrollWorkspaceSql,/hr_save_payroll_reminder/);assert.match(payrollWorkspaceSql,/hr_update_payroll_reminder/);
 for(const feature of ["Payroll summary","Payroll handoff to Finance","Payment summary","Payslip preview","Salary & payroll reminders"]){assert.match(hrmsUi,new RegExp(feature));}
+for(const feature of ["The day before yesterday","attendance-date-controls","BS month","BS date","visibilitychange"]){assert.match(hrmsUi,new RegExp(feature));}
+assert.doesNotMatch(hrmsUi,/attendance-date-divider/);
 console.log("Phase 7 HRMS checks passed.");

@@ -12,6 +12,7 @@ const shell=read("src/components/layout/AppShell.tsx");
 const routes=read("src/app/App.tsx");
 const dashboard=read("src/features/dashboard/ManagementDashboard.tsx");
 const hrms=read("src/features/hrms/HrmsWorkspace.tsx");
+const deliveryFix=read("supabase/migrations/202609110001_assignment_reports_voice_calls.sql");
 
 assert.match(migration,/create table if not exists public\.staff_assignments/);
 assert.match(migration,/create_staff_assignment/);
@@ -33,6 +34,9 @@ assert.match(workspace,/Completion report/);
 assert.match(workspace,/Request revision/);
 assert.match(workspace,/roleTemplates/);
 assert.match(workspace,/const canAssign=hasPermission\("assignments\.assign"\)/);
+assert.match(deliveryFix,/assigned_to=auth\.uid\(\)/);
+assert.match(deliveryFix,/Only the assigned staff member can submit this active assignment/);
+assert.doesNotMatch(workspace,/canSubmit&&task\.assignedTo/);
 assert.match(service,/generateUuid\(\)/);
 assert.doesNotMatch(service,/crypto\.randomUUID\(\)/);
 assert.match(shell,/to="\/assignments"/);

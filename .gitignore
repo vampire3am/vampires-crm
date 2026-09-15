@@ -58,3 +58,6 @@ data/*.json
 /.npm-cache*/
 /work-vite.stdout.log
 /work-vite.stderr.log
+/tmp/
+/.preview-manual/
+/.npm-cache-hrms/
