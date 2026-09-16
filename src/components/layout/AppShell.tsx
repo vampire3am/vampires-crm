@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Clock,
   ClipboardCheck,
+  ListTodo,
   CreditCard,
   FileCheck2,
   FileText,
@@ -160,6 +161,7 @@ export function AppShell() {
     if (location.pathname.startsWith("/email-automation")) return "Email Automation & Drip Campaigns";
     if (location.pathname.startsWith("/analytics")) return "Live CRM Reports & Analytics";
     if (location.pathname.startsWith("/assignments")) return "Staff Assignments & Completion Reports";
+    if (location.pathname.startsWith("/todos")) return "To-Do List";
     if (location.pathname.startsWith("/settings")) return "System Settings & RBAC";
     return "Operations Workspace";
   }, [location.pathname]);
@@ -386,6 +388,7 @@ export function AppShell() {
                 </div>
               </NavLink>
             )}
+            {permissions.todos&&<NavLink to="/todos" className={({isActive})=>isActive?"sidebar-link active":"sidebar-link"}><div className="sidebar-link-content"><ListTodo size={16}/><span>To-Do List</span></div></NavLink>}
 
             {/* COLLAPSIBLE HRMS GROUP (ONLY AUTHORIZED ROLES) */}
             {permissions.hrms && (
@@ -805,7 +808,7 @@ export function AppShell() {
 
         {/* Dynamic Route Content */}
         <main id="main-content" className={`app-content ${supervisionOnly?"admin-supervision-mode":""}`} style={{ flex: 1 }} tabIndex={-1}>
-          {supervisionOnly&&location.pathname!=="/messages"&&<div className="admin-supervision-banner"><ShieldCheck size={16}/><div><strong>Admin oversight with authorized operations</strong><span>You can manage staff access, internal messages, assignments, HRMS and accounting entries. Other CRM modules remain supervision-only.</span></div></div>}
+          {supervisionOnly&&location.pathname!=="/messages"&&location.pathname!=="/todos"&&<div className="admin-supervision-banner"><ShieldCheck size={16}/><div><strong>Admin oversight with authorized operations</strong><span>You can manage staff access, internal messages, assignments, HRMS and accounting entries. Other CRM modules remain supervision-only.</span></div></div>}
           <Outlet />
         </main>
       </div>
