@@ -1,0 +1,10 @@
+import { supabase } from "../lib/supabase";
+export type TodoRecord={id:string;title:string;notes:string;priority:"LOW"|"MEDIUM"|"HIGH";dueAt:string|null;completedAt:string|null;assignedTo:string;createdBy:string;position:number;assignee?:{full_name:string}|null;creator?:{full_name:string}|null};
+export type TodoActivity={id:number;todoId:string;action:string;details:Record<string,unknown>;createdAt:string;actor?:{full_name:string}|null;todo?:{title:string}|null};
+export const TodoService={
+ async list(){const{data,error}=await supabase.from("staff_todos").select("*,assignee:staff_profiles!staff_todos_assigned_to_fkey(full_name),creator:staff_profiles!staff_todos_created_by_fkey(full_name)").order("position").order("created_at",{ascending:false});if(error)throw error;return(data??[]).map((r:any)=>({id:r.id,title:r.title,notes:r.notes??"",priority:r.priority,dueAt:r.due_at,completedAt:r.completed_at,assignedTo:r.assigned_to,createdBy:r.created_by,position:r.position,assignee:r.assignee,creator:r.creator})) as TodoRecord[]},
+ async create(payload:{title:string;notes?:string;priority:string;dueAt?:string;assignedTo?:string}){const{error}=await supabase.rpc("save_staff_todo",{payload:{title:payload.title,notes:payload.notes??"",priority:payload.priority,due_at:payload.dueAt||null,assigned_to:payload.assignedTo||null}});if(error)throw error},
+ async update(id:string,payload:Record<string,unknown>){const{error}=await supabase.rpc("update_staff_todo",{todo_uuid:id,payload});if(error)throw error},
+ async remove(id:string){const{error}=await supabase.rpc("delete_staff_todo",{todo_uuid:id});if(error)throw error},
+ async activity(){const{data,error}=await supabase.from("staff_todo_activity").select("*,actor:staff_profiles!staff_todo_activity_actor_id_fkey(full_name),todo:staff_todos(title)").order("created_at",{ascending:false}).limit(500);if(error)throw error;return(data??[]).map((r:any)=>({id:r.id,todoId:r.todo_id,action:r.action,details:r.details,createdAt:r.created_at,actor:r.actor,todo:r.todo})) as TodoActivity[]},
+};
