@@ -17,6 +17,7 @@ assert.match(sql, /audit_logs/);
 assert.match(service, /save_organization/);
 assert.match(reportService, /report_lead_pipeline/);
 assert.match(reportService, /management_dashboard_summary/);
-assert.match(reportUi, /Live Student Pipeline/);
+assert.match(reportUi, /Reports & Analytics Centre/);
+assert.match(reportUi, /REPORT_CATALOGUE/);
 assert.doesNotMatch(reportUi, /BLUEPRINT_50_REPORTS|1,200 leads|96\.2/);
 console.log("Phase 9 reporting/admin checks passed.");

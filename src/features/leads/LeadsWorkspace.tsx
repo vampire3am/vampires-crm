@@ -24,6 +24,8 @@ import { CountrySelect } from "../../components/ui/CountrySelect";
 import { IntakePicker } from "../../components/ui/IntakePicker";
 import { AECS_AUTHORIZED_COUNTRIES } from "../../lib/destinationsData";
 import { CountryDisplay } from "../../components/ui/CountryDisplay";
+import { useAuth } from "../auth/AuthProvider";
+import { notifyError, notifySuccess } from "../../components/common/CrmNotifications";
 
 const LEAD_STAGES = [
   { key: "NEW_INQUIRY", label: "New Inquiries", color: "blue" },
@@ -34,6 +36,8 @@ const LEAD_STAGES = [
 ];
 
 export function LeadsWorkspace() {
+  const { hasPermission } = useAuth();
+  const canCreateLead = hasPermission("leads.create");
   const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [search, setSearch] = useState("");
@@ -99,6 +103,10 @@ export function LeadsWorkspace() {
 
   const handleCreateLead = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreateLead) {
+      notifyError("Lead creation unavailable", "Your profile does not have the Create leads permission. Ask an administrator to enable it in Users & Permissions.");
+      return;
+    }
     if (!form.fullName.trim() || !form.phone.trim()) return;
 
     setIsSaving(true);
@@ -118,6 +126,7 @@ export function LeadsWorkspace() {
       priority: form.priority,
       });
       await loadLeads();
+      notifySuccess("Lead created", `${form.fullName.trim()} was added to the lead pipeline.`);
       setShowCaptureModal(false);
       setForm({
       fullName: "",
@@ -133,7 +142,9 @@ export function LeadsWorkspace() {
       priority: "HIGH",
       });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to create this lead.");
+      const message=error instanceof Error ? error.message : "Unable to create this lead.";
+      setErrorMessage(message);
+      notifyError("Unable to create lead", message);
     } finally {
       setIsSaving(false);
     }
@@ -787,9 +798,9 @@ export function LeadsWorkspace() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
+                <button type="submit" className="btn-primary" disabled={isSaving||!canCreateLead} title={!canCreateLead?"Create leads permission is required":undefined}>
                   <Zap size={15} />
-                  <span>Capture & Assign Lead</span>
+                  <span>{isSaving?"Creating lead…":canCreateLead?"Capture & Assign Lead":"Permission required"}</span>
                 </button>
               </div>
             </form>
