@@ -34,6 +34,7 @@ export interface RolePermissions {
   settings: boolean;
   messages: boolean;
   assignments: boolean;
+  todos: boolean;
 }
 
 const permissions = (
@@ -58,12 +59,13 @@ const ROLE_PERMISSION_KEYS: RolePermissions = {
   settings: false,
   messages: false,
   assignments: false,
+  todos: false,
 };
 
 const ALL_PERMISSIONS = Object.keys(ROLE_PERMISSION_KEYS) as Array<keyof RolePermissions>;
 
 export const ROLE_PERMISSIONS: Record<StaffRole, RolePermissions> = {
-  ADMIN: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "classes", "mocks", "documents", "finance", "reports", "hrms", "settings", "messages", "assignments"]),
+  ADMIN: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "classes", "mocks", "documents", "finance", "reports", "hrms", "settings", "messages", "assignments", "todos"]),
   HR_ADMIN: permissions(["dashboard", "hrms", "reports", "settings", "documents", "messages", "assignments"]),
   DIRECTOR: permissions(ALL_PERMISSIONS.filter(permission => permission !== "settings")),
   SENIOR_COUNSELLOR: permissions(["dashboard", "leads", "students", "counselling", "applications", "b2b", "documents", "messages", "assignments"]),
