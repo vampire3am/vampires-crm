@@ -74,6 +74,7 @@ const EmailAutomationWorkspace = lazy(() =>
 const AssignmentsWorkspace = lazy(() =>
   import("../features/assignments/AssignmentsWorkspace").then(m => ({ default: m.AssignmentsWorkspace }))
 );
+const TodoWorkspace = lazy(() => import("../features/todos/TodoWorkspace").then(m => ({ default: m.TodoWorkspace })));
 
 const NotFound = () => (
   <section className="page-container" style={{ minHeight: "70vh", display: "grid", placeItems: "center" }}>
@@ -303,6 +304,7 @@ export default function App() {
                 </RoleRouteGuard>
               }
             />
+            <Route path="/todos" element={<RoleRouteGuard permission="todos" workspaceName="To-Do List"><TodoWorkspace /></RoleRouteGuard>} />
 
             {/* Private and staff-group messaging */}
             <Route
