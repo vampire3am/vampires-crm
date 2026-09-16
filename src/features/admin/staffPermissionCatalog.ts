@@ -32,6 +32,11 @@ export const STAFF_PERMISSION_GROUPS: PermissionGroup[] = [
     { key: "assignments.submit", label: "Update progress and submit completion reports" },
     { key: "assignments.review", label: "Review submissions and request revisions" },
   ]},
+  { id: "todos", label: "To-Do List", module: "todos", permissions: [
+    { key: "todos.use", label: "Use personal and assigned to-do lists" },
+    { key: "todos.manage", label: "Assign and manage staff to-dos" },
+    { key: "todos.audit", label: "View every employee to-do and activity" },
+  ]},
   { id: "abroad", label: "Abroad & counselling", module: "counselling", permissions: [
     { key: "counselling.view", label: "View destinations and consultation records" },
     { key: "counselling.edit", label: "Manage destinations, universities and consultations" },
