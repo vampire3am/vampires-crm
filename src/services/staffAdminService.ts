@@ -7,6 +7,7 @@ export const STAFF_MODULES = [
   ["b2b", "B2B Partners"], ["classes", "Classes"], ["mocks", "Mock Tests"],
   ["documents", "Documents"], ["finance", "Finance"], ["reports", "Reports"],
   ["hrms", "HRMS"], ["messages", "Messages"], ["settings", "Administration"],
+  ["todos", "To-Do List"],
 ] as const;
 
 export const STAFF_ROLES: StaffRole[] = [

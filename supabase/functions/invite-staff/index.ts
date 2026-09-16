@@ -6,7 +6,7 @@ Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{head
   const body=await req.json();
   if(body.action==="set_password"){if(!body.user_id)throw new Error("Staff member is required");if(!body.password||body.password.length<10)throw new Error("Password must contain at least 10 characters");const{error}=await admin.auth.admin.updateUserById(body.user_id,{password:body.password});if(error)throw error;await admin.from("audit_logs").insert({user_id:user.id,action:"STAFF_PASSWORD_UPDATED",module:"staff",metadata:{staff_id:body.user_id}});return json({ok:true});}
   const allowed=["ADMIN","HR_ADMIN","DIRECTOR","FRONT_DESK","COUNSELLOR","DOCUMENTATION","FINANCE","TEST_BOOKING","SENIOR_COUNSELLOR","VISA_OFFICER","ACCOUNTANT","FACULTY","MARKETING","IT_ADMIN"];
-  const modules=["dashboard","leads","students","counselling","applications","assignments","b2b","classes","mocks","documents","finance","reports","hrms","settings","messages"];
+  const modules=["dashboard","leads","students","counselling","applications","assignments","todos","b2b","classes","mocks","documents","finance","reports","hrms","settings","messages"];
   if(!allowed.includes(body.role))throw new Error("Invalid role");if(!Array.isArray(body.desktop_modules)||body.desktop_modules.some((item:unknown)=>typeof item!=="string"||!modules.includes(item)))throw new Error("Invalid desktop module selection");
   const accessMode=body.access_mode==="EXACT"?"EXACT":"ROLE_PLUS";
   const permissionOverrides=Array.isArray(body.permission_overrides)?[...new Set(body.permission_overrides.filter((item:unknown)=>typeof item==="string"&&/^[a-z_]+\.[a-z_]+$/.test(item as string)))]:[];
