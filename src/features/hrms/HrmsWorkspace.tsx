@@ -7,6 +7,7 @@ import {
   BadgeDollarSign,
   BriefcaseBusiness,
   Calendar,
+  Camera,
   Check,
   ChevronRight,
   Clock,
@@ -35,6 +36,7 @@ import { notifyError, notifySuccess } from "../../components/common/CrmNotificat
 import { useAuth } from "../auth/AuthProvider";
 import { adToBs, bsMonthToAdRange, bsToAd, formatBsDate, formatBsMonth, isValidBsDate, todayAd, todayBs } from "../../lib/nepaliDate";
 import { canAccessHrmsTab, HRMS_TAB_ORDER, type HrmsTab } from "./hrmsAccess";
+import { StaffAdminService } from "../../services/staffAdminService";
 
 interface StaffMember {
   id: string;
@@ -49,6 +51,7 @@ interface StaffMember {
   joinDateRaw?: string;
   probationEndDate?: string | null;
   staffProfileId?: string | null;
+  avatarUrl?: string;
   managerId?: string | null;
   dateOfBirth?: string | null;
   gender?: string;
@@ -1601,6 +1604,9 @@ type EmployeeEditState={id:string;fullName:string;email:string;phone:string;role
 
 function EmployeeProfileWorkspace({staff,profileTab,setProfileTab,canManageHr,canManageSalary,onEdit,editState,setEditState,onSaveEmployee,staffList,attendance,leaves,payroll,documents,targets,components,activity,salaryForm,setSalaryForm,onAddSalaryComponent,onDeleteSalaryComponent,onOpenDocument}:{staff:StaffMember;profileTab:EmployeeProfileTab;setProfileTab:(tab:EmployeeProfileTab)=>void;canManageHr:boolean;canManageSalary:boolean;onEdit:()=>void;editState:EmployeeEditState;setEditState:React.Dispatch<React.SetStateAction<EmployeeEditState>>;onSaveEmployee:(event:React.FormEvent)=>void;staffList:StaffMember[];attendance:AttendanceRecord[];leaves:LeaveRequest[];payroll:PayrollRecord[];documents:StaffDocumentRecord[];targets:PerformanceTargetRecord[];components:SalaryComponentRecord[];activity:EmployeeActivityRecord[];salaryForm:SalaryFormState;setSalaryForm:React.Dispatch<React.SetStateAction<SalaryFormState>>;onAddSalaryComponent:(event:React.FormEvent)=>void;onDeleteSalaryComponent:(id:string)=>void;onOpenDocument:(document:StaffDocumentRecord)=>void}){
   const initials=staff.fullName.split(" ").map(part=>part[0]).slice(0,2).join("").toUpperCase();
+  const[avatarUrl,setAvatarUrl]=useState(staff.avatarUrl??"");
+  useEffect(()=>setAvatarUrl(staff.avatarUrl??""),[staff.id,staff.avatarUrl]);
+  const uploadAvatar=async(file?:File)=>{if(!file||!staff.staffProfileId)return;try{const url=await StaffAdminService.uploadAvatar(staff.staffProfileId,file);setAvatarUrl(url);notifySuccess("Profile photo updated","The new photo will now appear in HRMS and Messages.")}catch(error){notifyError("Photo upload failed",error instanceof Error?error.message:"The profile photo could not be saved")}};
   const manager=staffList.find(item=>item.id===staff.managerId);
   const staffAttendance=attendance.filter(item=>item.employeeId===staff.id);
   const staffLeaves=leaves.filter(item=>item.empCode===staff.empCode);
@@ -1617,7 +1623,7 @@ function EmployeeProfileWorkspace({staff,profileTab,setProfileTab,canManageHr,ca
   ];
   const detail=(label:string,value:React.ReactNode)=><div className="employee-detail-item"><span>{label}</span><strong>{value||"—"}</strong></div>;
   return <section className="employee-profile-workspace" id="employee-profile-workspace">
-    <header className="employee-profile-hero"><div className="employee-profile-identity"><span className="employee-profile-avatar">{initials}</span><div><span className="employee-profile-code">{staff.empCode}</span><h3>{staff.fullName}</h3><p>{staff.role} · {staff.department} · {staff.branch}</p></div></div><div className="employee-profile-actions"><span className={`employee-status status-${staff.status.toLowerCase()}`}><i/>{staff.status.replace("_"," ")}</span>{canManageHr&&<button type="button" className="btn-primary" onClick={onEdit}>Edit complete profile</button>}</div></header>
+    <header className="employee-profile-hero"><div className="employee-profile-identity"><label className={`employee-profile-avatar ${canManageHr&&staff.staffProfileId?"editable":""}`}>{avatarUrl?<img src={avatarUrl} alt={`${staff.fullName} profile`}/>:initials}{canManageHr&&staff.staffProfileId&&<><input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>void uploadAvatar(event.target.files?.[0])}/><i><Camera size={12}/></i></>}</label><div><span className="employee-profile-code">{staff.empCode}</span><h3>{staff.fullName}</h3><p>{staff.role} · {staff.department} · {staff.branch}</p></div></div><div className="employee-profile-actions"><span className={`employee-status status-${staff.status.toLowerCase()}`}><i/>{staff.status.replace("_"," ")}</span>{canManageHr&&<button type="button" className="btn-primary" onClick={onEdit}>Edit complete profile</button>}</div></header>
     <div className="employee-profile-kpis"><article><span>Employment</span><strong>{staff.employmentType?.replace("_"," ")??"Full time"}</strong><small>Since {staff.joinDate}</small></article><article><span>Attendance records</span><strong>{staffAttendance.length}</strong><small>{staffAttendance.filter(item=>item.status==="LATE").length} late arrivals</small></article><article><span>Leave requests</span><strong>{staffLeaves.length}</strong><small>{staffLeaves.filter(item=>item.status==="PENDING").length} awaiting decision</small></article><article><span>Performance goals</span><strong>{staffTargets.length}</strong><small>{staffTargets.filter(item=>item.status==="ACTIVE").length} active targets</small></article><article><span>Current package</span><strong>₨ {packageTotal.toLocaleString()}</strong><small>Basic plus recurring additions</small></article></div>
     <div className="employee-profile-body"><nav className="employee-profile-nav"><span>Employee workspace</span>{tabs.map(tab=><button type="button" key={tab.id} className={profileTab===tab.id?"active":""} onClick={()=>setProfileTab(tab.id)}>{tab.icon}<span>{tab.label}</span></button>)}</nav><main className="employee-profile-content">
       {profileTab==="overview"&&<><div className="employee-section-heading"><div><span>Employee profile</span><h4>Personal overview</h4><p>Identity, contact, statutory and reporting information.</p></div>{canManageHr&&<button type="button" className="btn-secondary" onClick={onEdit}>Edit overview</button>}</div><div className="employee-detail-grid"><section><h5>Personal details</h5>{detail("Work email",staff.email)}{detail("Phone",staff.phone)}{detail("Date of birth",staff.dateOfBirth?formatBsDate(staff.dateOfBirth):"—")}{detail("Gender",staff.gender)}{detail("Current address",staff.currentAddress)}{detail("Emergency contact",[staff.emergencyContactName,staff.emergencyContactPhone].filter(Boolean).join(" · "))}</section><section><h5>Employment snapshot</h5>{detail("Department",staff.department)}{detail("Designation",staff.role)}{detail("Reporting manager",manager?.fullName??"Not assigned")}{detail("Joining date",staff.joinDate)}{detail("Probation end",staff.probationEndDate?formatBsDate(staff.probationEndDate):"—")}{detail("Employment type",staff.employmentType?.replace("_"," "))}</section><section><h5>Statutory identity</h5>{detail("Citizenship",staff.citizenshipNumber)}{detail("PAN number",staff.panNumber)}{detail("SSF number",staff.ssfNumber)}{detail("Bank account",staff.bankAccount)}{detail("Payment method",staff.paymentMethod?.replace("_"," "))}{detail("Linked CRM account",staff.staffProfileId?"Connected":"Not connected")}</section></div></>}

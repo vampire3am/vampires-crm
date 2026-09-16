@@ -21,6 +21,7 @@ export type StaffAdminRecord = {
   desktop_modules: string[] | null; assigned_responsibilities: string;
   access_mode: "ROLE_PLUS" | "EXACT"; inactivity_minutes: number;
   permission_overrides: string[];
+  avatar_url?: string | null;
 };
 
 export type StaffAdminInput = Omit<StaffAdminRecord, "id" | "is_active"> & {
@@ -76,7 +77,7 @@ async function invoke(body: Record<string, unknown>) {
 export const StaffAdminService = {
   async list(): Promise<StaffAdminRecord[]> {
     const { data, error } = await supabase.from("staff_profiles")
-      .select("id,full_name,email,role,job_title,department,branch,phone,is_active,desktop_modules,assigned_responsibilities,access_mode,inactivity_minutes")
+      .select("id,full_name,email,role,job_title,department,branch,phone,is_active,desktop_modules,assigned_responsibilities,access_mode,inactivity_minutes,avatar_url")
       .order("full_name");
     if (error) throw error;
     const ids = (data ?? []).map(member => member.id);
@@ -97,5 +98,6 @@ export const StaffAdminService = {
   create(input: StaffAdminInput) { return invoke({ action: "create", ...input }) as Promise<{ok: boolean; user_id: string; employee_id: string}>; },
   update(id: string, input: StaffAdminInput) { return invoke({ action: "update", user_id: id, ...input }); },
   async employeeId(staffProfileId: string) { const { data, error } = await supabase.from("hr_employees").select("id").eq("staff_profile_id", staffProfileId).maybeSingle(); if (error) throw error; return data?.id as string | undefined; },
+  async uploadAvatar(staffProfileId:string,file:File){if(!["image/jpeg","image/png","image/webp"].includes(file.type))throw new Error("Choose a JPG, PNG, or WEBP profile picture.");if(file.size>5*1024*1024)throw new Error("Profile pictures must be 5 MB or smaller.");const extension=file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg";const path=`${staffProfileId}/profile.${extension}`;const{error:uploadError}=await supabase.storage.from("staff-avatars").upload(path,file,{contentType:file.type,upsert:true,cacheControl:"3600"});if(uploadError)throw new Error(uploadError.message);const{data}=supabase.storage.from("staff-avatars").getPublicUrl(path);const avatarUrl=`${data.publicUrl}?v=${Date.now()}`;const{error}=await supabase.rpc("set_staff_avatar",{staff_uuid:staffProfileId,avatar_url_value:avatarUrl});if(error)throw new Error(error.message);return avatarUrl},
   setPassword(id: string, password: string) { return invoke({ action: "set_password", user_id: id, password }); },
 };

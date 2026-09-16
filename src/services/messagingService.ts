@@ -9,6 +9,7 @@ export interface StaffUser {
   department: "Management" | "Counselling" | "Visa & Compliance" | "Test Preparation" | "Finance & Accounts" | "Front Desk & Intake" | "B2B & Marketing" | "IT & Operations";
   presence: "ONLINE" | "IN_MEETING" | "BUSY" | "AWAY" | "OFFLINE";
   avatarBg: string;
+  avatarUrl?: string;
   phone?: string;
   bio?: string;
 }
@@ -33,6 +34,7 @@ export interface ChatMessage {
   senderName: string;
   senderRole: string;
   senderAvatarBg: string;
+  senderAvatarUrl?: string;
   channelId?: string;
   recipientId?: string;
   content: string;
@@ -88,12 +90,12 @@ export const MessagingService = {
   getUnreadCount: async ():Promise<number> => {const{data,error}=await supabase.rpc("get_unread_message_count");if(error)throw error;return Number(data??0)},
   markAllRead: async ():Promise<void> => {const{error}=await supabase.rpc("mark_all_messages_read");if(error)throw error;window.dispatchEvent(new CustomEvent("aecs:message-read-state"))},
   markConversationRead: async (target:{recipientId?:string;channelId?:string}):Promise<void> => {const{error}=await supabase.rpc("mark_conversation_messages_read",{other_staff_uuid:target.recipientId??null,channel_uuid:target.channelId??null});if(error)throw error;window.dispatchEvent(new CustomEvent("aecs:message-read-state"))},
-  getStaff: async ():Promise<StaffUser[]> => {const{data,error}=await supabase.from("staff_profiles").select("id,full_name,email,role,department,phone,avatar_bg").eq("is_active",true).order("full_name");if(error)throw error;return(data??[]).map(s=>({id:String(s.id),fullName:s.full_name?.trim()||"Staff member",email:s.email?.trim()||"",role:s.role?.trim()||"Staff",department:(s.department?.trim()||"IT & Operations")as StaffUser["department"],presence:"OFFLINE",avatarBg:s.avatar_bg||"#F97316",phone:s.phone??undefined}))},
+  getStaff: async ():Promise<StaffUser[]> => {const{data,error}=await supabase.from("staff_profiles").select("id,full_name,email,role,department,phone,avatar_bg,avatar_url").eq("is_active",true).order("full_name");if(error)throw error;return(data??[]).map(s=>({id:String(s.id),fullName:s.full_name?.trim()||"Staff member",email:s.email?.trim()||"",role:s.role?.trim()||"Staff",department:(s.department?.trim()||"IT & Operations")as StaffUser["department"],presence:"OFFLINE",avatarBg:s.avatar_bg||"#F97316",avatarUrl:s.avatar_url??undefined,phone:s.phone??undefined}))},
   getChannels: async ():Promise<ChatChannel[]> => {const{data,error}=await supabase.from("communication_channels").select("id,name,description,category,is_private,communication_channel_members(count)").order("name");if(error)throw error;return(data??[]).map(c=>({id:c.id,name:c.name,description:c.description??"",topic:c.description??"",category:c.category==="BROADCAST"?"Broadcast":c.category==="CASE"?"Admissions":"Department",iconName:c.category==="BROADCAST"?"Megaphone":"Users",isPrivate:c.is_private,memberCount:c.communication_channel_members?.[0]?.count??0,unreadCount:0}))},
   createStaffGroup:async(payload:{name:string;description:string;memberIds:string[]}):Promise<string>=>{const{data,error}=await supabase.rpc("create_staff_group",{payload:{name:payload.name,description:payload.description,member_ids:payload.memberIds}});if(error)throw error;return String(data)},
   getMessages: async (): Promise<ChatMessage[]> => {
     const [{data,error},{data:{user}}]=await Promise.all([
-      supabase.from("communication_messages").select("*,sender:staff_profiles!communication_messages_sender_id_fkey(full_name,role,avatar_bg),students(student_code,full_name),communication_reactions(emoji,staff_profiles(full_name)),communication_message_reads(read_at,staff_id)").order("created_at", { ascending: false }).limit(1000),
+      supabase.from("communication_messages").select("*,sender:staff_profiles!communication_messages_sender_id_fkey(full_name,role,avatar_bg,avatar_url),students(student_code,full_name),communication_reactions(emoji,staff_profiles(full_name)),communication_message_reads(read_at,staff_id)").order("created_at", { ascending: false }).limit(1000),
       supabase.auth.getUser(),
     ]);
     if(error)throw error;
@@ -103,7 +105,7 @@ export const MessagingService = {
       const reads=(m.communication_message_reads??[]) as Array<{read_at:string;staff_id:string}>;
       const recipientRead=reads.find(r=>r.staff_id===m.recipient_id);
       const currentUserRead=reads.some(r=>r.staff_id===user?.id);
-      return{id:m.id,senderId:m.sender_id,senderName:m.sender?.full_name??"Staff",senderRole:m.sender?.role??"Staff",senderAvatarBg:m.sender?.avatar_bg??"#F97316",channelId:m.channel_id??undefined,recipientId:m.recipient_id??undefined,content:m.content,createdAt:m.created_at,timestamp:new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Kathmandu",hour:"numeric",minute:"2-digit",hour12:true}).format(new Date(m.created_at)),taggedStudentCode:m.students?.student_code,taggedStudentName:m.students?.full_name,attachments:m.attachments as ChatAttachment[],reactions:[...grouped].map(([emoji,users])=>({emoji,count:users.length,users})),isPinned:m.is_pinned,readAt:recipientRead?.read_at??reads[0]?.read_at??undefined,isReadByCurrentUser:currentUserRead,readCount:reads.length};
+      return{id:m.id,senderId:m.sender_id,senderName:m.sender?.full_name??"Staff",senderRole:m.sender?.role??"Staff",senderAvatarBg:m.sender?.avatar_bg??"#F97316",senderAvatarUrl:m.sender?.avatar_url??undefined,channelId:m.channel_id??undefined,recipientId:m.recipient_id??undefined,content:m.content,createdAt:m.created_at,timestamp:new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Kathmandu",hour:"numeric",minute:"2-digit",hour12:true}).format(new Date(m.created_at)),taggedStudentCode:m.students?.student_code,taggedStudentName:m.students?.full_name,attachments:m.attachments as ChatAttachment[],reactions:[...grouped].map(([emoji,users])=>({emoji,count:users.length,users})),isPinned:m.is_pinned,readAt:recipientRead?.read_at??reads[0]?.read_at??undefined,isReadByCurrentUser:currentUserRead,readCount:reads.length};
     });
   },
 

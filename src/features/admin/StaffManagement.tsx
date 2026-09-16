@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { StaffRole } from "../auth/AuthProvider";
 import { STAFF_ROLES, StaffAdminService, type StaffAdminInput, type StaffAdminRecord } from "../../services/staffAdminService";
 import { modulesForPermissions, STAFF_PERMISSION_GROUPS } from "./staffPermissionCatalog";
-import { HrmsService } from "../../services/hrmsService";
 
 const emptyForm = (): StaffAdminInput => ({
   full_name: "", email: "", role: "COUNSELLOR", job_title: "", department: "",
@@ -66,11 +65,11 @@ export function StaffManagement({readOnly=false}:{readOnly?:boolean}) {
       if (!editing && (!form.password || form.password.length < 10)) throw new Error("Temporary password must contain at least 10 characters.");
       if (!effective.length) throw new Error("Select at least one permission for this account.");
       const payload = { ...form, branch:"AECS Bagbazar Main Office", desktop_modules: modulesForPermissions(effective) };
-      let employeeId: string | undefined;
-      if (editing) { await StaffAdminService.update(editing.id, payload); employeeId=await StaffAdminService.employeeId(editing.id); }
-      else employeeId=(await StaffAdminService.create(payload)).employee_id;
+      let staffProfileId: string;
+      if (editing) { await StaffAdminService.update(editing.id, payload); staffProfileId=editing.id; }
+      else staffProfileId=(await StaffAdminService.create(payload)).user_id;
       let photoWarning="";
-      if(photoFile){try{if(!employeeId)throw new Error("HR employee record unavailable");await HrmsService.uploadStaffDocument(employeeId,"Profile Photo",photoFile)}catch{photoWarning=" The account was saved, but the profile picture could not be uploaded; add it later from the employee profile."}}
+      if(photoFile){try{await StaffAdminService.uploadAvatar(staffProfileId,photoFile)}catch(error){photoWarning=` The account was saved, but the profile picture failed: ${error instanceof Error?error.message:"upload failed"}`}}
       setOpen(false); setSuccess((editing ? "Staff identity and access updated successfully." : "Staff login created successfully.")+photoWarning); await load();
     } catch (e) { setError(e instanceof Error ? e.message : "Staff could not be saved"); }
     finally { setBusy(false); }

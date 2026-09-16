@@ -556,7 +556,7 @@ export function MessagesWorkspace() {
                   >
                     <div className="messenger-avatar-wrap">
                       <div className="messenger-avatar-circle" style={{ background: staff.avatarBg }}>
-                        {initials}
+                        {staff.avatarUrl?<img src={staff.avatarUrl} alt={`${staff.fullName} profile`}/>:initials}
                       </div>
                       {staff.presence === "ONLINE" && <div className="messenger-presence-badge" />}
                     </div>
@@ -602,7 +602,7 @@ export function MessagesWorkspace() {
                       className="messenger-avatar-circle"
                       style={{ width: "40px", height: "40px", background: currentRecipient?.avatarBg || "#F97316" }}
                     >
-                      {currentRecipient?.fullName.substring(0, 2).toUpperCase()}
+                      {currentRecipient?.avatarUrl?<img src={currentRecipient.avatarUrl} alt={`${currentRecipient.fullName} profile`}/>:currentRecipient?.fullName.substring(0, 2).toUpperCase()}
                     </div>
                     {currentRecipient?.presence === "ONLINE" && <div className="messenger-presence-badge" />}
                   </div>
@@ -662,7 +662,7 @@ export function MessagesWorkspace() {
                   className="messenger-welcome-avatar"
                   style={{ background: currentRecipient?.avatarBg || "#F97316" }}
                 >
-                  {currentRecipient?.fullName.substring(0, 2).toUpperCase()}
+                  {currentRecipient?.avatarUrl?<img src={currentRecipient.avatarUrl} alt={`${currentRecipient.fullName} profile`}/>:currentRecipient?.fullName.substring(0, 2).toUpperCase()}
                 </div>
                 <h3 style={{ fontSize: "17px", fontWeight: 800, margin: "0 0 2px 0" }}>
                   {currentRecipient?.fullName}
@@ -690,7 +690,7 @@ export function MessagesWorkspace() {
                       className="messenger-bubble-avatar"
                       style={{ background: msg.senderAvatarBg || "#F97316" }}
                     >
-                      {msg.senderName.substring(0, 2).toUpperCase()}
+                      {msg.senderAvatarUrl?<img src={msg.senderAvatarUrl} alt={`${msg.senderName} profile`}/>:msg.senderName.substring(0, 2).toUpperCase()}
                     </div>
                   )}
 
