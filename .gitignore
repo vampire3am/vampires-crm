@@ -61,3 +61,4 @@ data/*.json
 /tmp/
 /.preview-manual/
 /.npm-cache-hrms/
+/.codex-payroll-deploy/
