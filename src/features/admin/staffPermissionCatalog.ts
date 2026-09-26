@@ -66,6 +66,15 @@ export const STAFF_PERMISSION_GROUPS: PermissionGroup[] = [
     { key: "finance.create", label: "Create invoices, receipts and commissions" },
     { key: "finance.approve", label: "Approve financial transactions" },
   ]},
+  { id: "breaks", label: "Employee breaks", module: "hrms", permissions: [
+    { key: "breaks.use", label: "Take and end personal breaks", description: "Requires an active employee profile and attendance clock-in." },
+    { key: "breaks.team_view", label: "View breaks for directly managed employees" },
+    { key: "breaks.view_all", label: "View every employee break record" },
+    { key: "breaks.manage", label: "Correct, close and cancel break records" },
+    { key: "break_types.manage", label: "Configure employee break types" },
+    { key: "breaks.reports.view", label: "View break summaries and reports" },
+    { key: "breaks.export", label: "Export employee break records" },
+  ]},
   { id: "hr", label: "HRMS & employees", module: "hrms", permissions: [
     { key: "hr.self_service", label: "Use personal attendance and leave" }, { key: "hr.view", label: "View HR workspace" },
     { key: "hr.manage", label: "Manage employee profiles, lifecycle and shifts" },

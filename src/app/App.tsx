@@ -263,7 +263,7 @@ export default function App() {
             <Route
               path="/hrms"
               element={
-                <RoleRouteGuard permission="hrms" workspaceName="HRMS & Staff Management">
+                <RoleRouteGuard permission="hrms" anyActionPermissions={["breaks.use", "breaks.team_view", "breaks.view_all", "breaks.manage"]} workspaceName="HRMS & Staff Management">
                   <HrmsWorkspace />
                 </RoleRouteGuard>
               }
@@ -279,7 +279,7 @@ export default function App() {
             <Route
               path="/hrms/reports"
               element={
-                <RoleRouteGuard permission="reports" workspaceName="HRMS Reports">
+                <RoleRouteGuard permission="reports" anyActionPermissions={["hr.reports.view", "breaks.reports.view"]} workspaceName="HRMS Reports">
                   <HrmsReportsWorkspace />
                 </RoleRouteGuard>
               }

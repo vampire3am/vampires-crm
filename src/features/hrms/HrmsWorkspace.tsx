@@ -37,6 +37,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { adToBs, bsMonthToAdRange, bsToAd, formatBsDate, formatBsMonth, isValidBsDate, todayAd, todayBs } from "../../lib/nepaliDate";
 import { canAccessHrmsTab, HRMS_TAB_ORDER, type HrmsTab } from "./hrmsAccess";
 import { StaffAdminService } from "../../services/staffAdminService";
+import { BreakManagementWorkspace } from "./BreakManagementWorkspace";
 
 interface StaffMember {
   id: string;
@@ -927,6 +928,8 @@ export function HrmsWorkspace() {
       )}
 
       {/* TAB 3: LEAVES */}
+      {activeTab === "breaks" && <BreakManagementWorkspace />}
+
       {activeTab === "leaves" && (
         <div className="crm-panel">
           <div className="panel-header-bar">

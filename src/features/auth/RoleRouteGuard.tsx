@@ -1,22 +1,23 @@
-import { ArrowLeft, Lock, ShieldAlert, UserCheck } from "lucide-react";
+import { ArrowLeft, Lock, UserCheck } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth, type RolePermissions } from "./AuthProvider";
 
 interface RoleRouteGuardProps {
   permission: keyof RolePermissions;
+  anyActionPermissions?: string[];
   workspaceName: string;
   children: React.ReactNode;
 }
 
-export function RoleRouteGuard({ permission, workspaceName, children }: RoleRouteGuardProps) {
-  const { profile, permissions } = useAuth();
+export function RoleRouteGuard({ permission, anyActionPermissions = [], workspaceName, children }: RoleRouteGuardProps) {
+  const { profile, permissions, hasPermission } = useAuth();
 
   if (!profile) {
     return <Navigate to="/login" replace />;
   }
 
   // Check if role has permission
-  const isAllowed = permissions[permission];
+  const isAllowed = permissions[permission] || anyActionPermissions.some(hasPermission);
 
   if (!isAllowed) {
     return (

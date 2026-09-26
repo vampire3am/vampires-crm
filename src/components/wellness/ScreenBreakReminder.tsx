@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { HrmsService } from "../../services/hrmsService";
+import { notifyError } from "../common/CrmNotifications";
 
 // Config constants
 const WORK_LIMIT_SECONDS = 60 * 60; // 60 minutes
@@ -142,10 +143,15 @@ export function ScreenBreakReminder() {
   };
 
   const handleStartBreak = async () => {
-    setShowPromptModal(false);
-    setIsBreakActive(true);
-    setBreakSecondsLeft(BREAK_LIMIT_SECONDS);
-    try { activeBreakIdRef.current = await HrmsService.startWorkBreak(breakSourceRef.current); } catch { activeBreakIdRef.current = null; }
+    try {
+      activeBreakIdRef.current=await HrmsService.startWorkBreak(breakSourceRef.current);
+      setShowPromptModal(false);
+      setIsBreakActive(true);
+      setBreakSecondsLeft(BREAK_LIMIT_SECONDS);
+    } catch(error) {
+      activeBreakIdRef.current = null;
+      notifyError("Break not started",error instanceof Error?error.message:"Unable to record this break");
+    }
   };
 
   const handleSnooze = (mins = 5) => {
@@ -161,8 +167,15 @@ export function ScreenBreakReminder() {
 
   const handleCompleteBreak = async () => {
     const breakId = activeBreakIdRef.current;
+    if (breakId) {
+      try { await HrmsService.completeWorkBreak(breakId); }
+      catch(error) {
+        setBreakSecondsLeft(1);
+        notifyError("Break not ended",error instanceof Error?error.message:"Unable to record your return to work");
+        return;
+      }
+    }
     activeBreakIdRef.current = null;
-    if (breakId) { try { await HrmsService.completeWorkBreak(breakId); } catch { /* The timer must still resume if audit sync fails. */ } }
     setIsBreakActive(false);
     setActiveSeconds(0);
     setBreakSecondsLeft(BREAK_LIMIT_SECONDS);

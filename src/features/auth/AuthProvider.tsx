@@ -221,10 +221,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [profile, session]);
 
   const rolePermissions = useMemo(
-    () => profile
-      ? (profile.desktop_modules ? permissions(profile.desktop_modules) : (ROLE_PERMISSIONS[profile.role] || NO_PERMISSIONS))
-      : NO_PERMISSIONS,
-    [profile]
+    () => {
+      if (!profile) return NO_PERMISSIONS;
+      const resolved = profile.desktop_modules ? permissions(profile.desktop_modules) : { ...(ROLE_PERMISSIONS[profile.role] || NO_PERMISSIONS) };
+      if (effectivePermissions.some(permission => /^(hr\.|attendance\.|breaks\.|break_types\.|leave\.|payroll\.|salary\.|performance\.)/.test(permission))) {
+        resolved.hrms = true;
+      }
+      return resolved;
+    },
+    [profile, effectivePermissions]
   );
 
   const value = useMemo<AuthContextValue>(() => ({

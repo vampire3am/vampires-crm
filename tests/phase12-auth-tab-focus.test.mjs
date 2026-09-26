@@ -10,6 +10,6 @@ assert.doesNotMatch(
   /onAuthStateChange[\s\S]{0,500}setLoading\(Boolean\(nextSession\)\)/,
   "Background token refreshes must not replace the current workspace with a loading screen",
 );
-assert.match(auth, /\}, \[session\?\.user\.id\]\);/);
+assert.match(auth, /\}, \[sessionUserId\]\);/);
 
 console.log("Auth tab-focus preservation checks passed");

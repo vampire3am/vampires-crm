@@ -9,7 +9,7 @@ Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{head
   const modules=["dashboard","leads","students","counselling","applications","assignments","todos","b2b","classes","mocks","documents","finance","reports","hrms","settings","messages"];
   if(!allowed.includes(body.role))throw new Error("Invalid role");if(!Array.isArray(body.desktop_modules)||body.desktop_modules.some((item:unknown)=>typeof item!=="string"||!modules.includes(item)))throw new Error("Invalid desktop module selection");
   const accessMode=body.access_mode==="EXACT"?"EXACT":"ROLE_PLUS";
-  const permissionOverrides=Array.isArray(body.permission_overrides)?[...new Set(body.permission_overrides.filter((item:unknown)=>typeof item==="string"&&/^[a-z_]+\.[a-z_]+$/.test(item as string)))]:[];
+  const permissionOverrides=Array.isArray(body.permission_overrides)?[...new Set(body.permission_overrides.filter((item:unknown)=>typeof item==="string"&&/^[a-z_]+(?:\.[a-z_]+)+$/.test(item as string)))]:[];
   const inactivityMinutes=Number(body.inactivity_minutes||30);if(!Number.isInteger(inactivityMinutes)||inactivityMinutes<5||inactivityMinutes>720)throw new Error("Invalid inactivity timeout");
   const profile={full_name:body.full_name?.trim(),email:body.email?.trim().toLowerCase(),role:body.role,job_title:body.job_title?.trim()||"Staff Member",department:body.department?.trim()||"General Operations",branch:"AECS Bagbazar Main Office",phone:body.phone?.trim()||null,desktop_modules:body.desktop_modules,assigned_responsibilities:body.assigned_responsibilities?.trim()||"",access_mode:accessMode,inactivity_minutes:inactivityMinutes,is_active:body.is_active!==false};
   if(!profile.full_name||!profile.email)throw new Error("Name and email are required");

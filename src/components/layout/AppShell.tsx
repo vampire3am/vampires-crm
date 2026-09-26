@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Coffee,
   ClipboardCheck,
   ListTodo,
   CreditCard,
@@ -173,7 +174,7 @@ export function AppShell() {
       const isAuthorized = !permission || permissions[permission];
       const hrmsTab = item.to.startsWith("/hrms?") ? new URLSearchParams(item.to.split("?")[1]).get("tab") as HrmsTab | null : null;
       const hasHrmsAction = item.to === "/hrms/reports"
-        ? hasPermission("hr.reports.view")
+        ? hasPermission("hr.reports.view") || hasPermission("breaks.reports.view")
         : item.to === "/hrms/settings"
           ? hasPermission("hr.settings.manage")
           : !hrmsTab || canAccessHrmsTab(hrmsTab, hasPermission);
@@ -431,6 +432,14 @@ export function AppShell() {
                       <span>Attendance</span>
                     </NavLink>}
 
+                    {canAccessHrmsTab("breaks", hasPermission) && <NavLink
+                      to="/hrms?tab=breaks"
+                      className={({ isActive }) => (isActive && location.search.includes("tab=breaks") ? "sidebar-sublink active" : "sidebar-sublink")}
+                    >
+                      <Coffee size={14} />
+                      <span>Employee Breaks</span>
+                    </NavLink>}
+
                     {canAccessHrmsTab("leaves", hasPermission) && <NavLink
                       to="/hrms?tab=leaves"
                       className={({ isActive }) => (isActive && location.search.includes("tab=leaves") ? "sidebar-sublink active" : "sidebar-sublink")}
@@ -462,7 +471,7 @@ export function AppShell() {
                       <FileText size={14} />
                       <span>HR Documents</span>
                     </NavLink>}
-                    {hasPermission("hr.reports.view") && <NavLink
+                    {(hasPermission("hr.reports.view") || hasPermission("breaks.reports.view")) && <NavLink
                       to="/hrms/reports"
                       className={({ isActive }) => (isActive && location.pathname==="/hrms/reports" ? "sidebar-sublink active" : "sidebar-sublink")}
                     >
@@ -600,7 +609,7 @@ export function AppShell() {
             </button>
 
             {/* Screen Time & Wellness Break Reminder (30-min active use -> 5-min break) */}
-            <ScreenBreakReminder />
+            {hasPermission("breaks.use") && <ScreenBreakReminder />}
 
             {/* Theme Switcher Toggle */}
             <button

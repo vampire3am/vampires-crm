@@ -1,10 +1,10 @@
 import { supabase } from "../lib/supabase";
 
 export type HrConfigRow = Record<string, unknown> & { id: string };
-export type HrReportKey = "employee"|"attendance"|"leave"|"payroll"|"salary"|"performance"|"kpi"|"appraisal"|"workforce";
+export type HrReportKey = "employee"|"attendance"|"breaks"|"leave"|"payroll"|"salary"|"performance"|"kpi"|"appraisal"|"workforce";
 
 const reportViews: Record<HrReportKey,string> = {
-  employee:"hr_report_employee", attendance:"hr_report_attendance", leave:"hr_report_leave",
+  employee:"hr_report_employee", attendance:"hr_report_attendance", breaks:"hr_report_breaks", leave:"hr_report_leave",
   payroll:"hr_report_payroll", salary:"hr_report_salary", performance:"hr_report_performance",
   kpi:"hr_report_kpi", appraisal:"hr_report_appraisal", workforce:"hr_report_workforce",
 };
@@ -64,6 +64,7 @@ export const HrmsConfigurationService={
     catch{return ([
       ["employee","Employee Reports","Employee master, employment state and organization placement."],
       ["attendance","Attendance Reports","Daily and monthly attendance, lateness and worked hours."],
+      ["breaks","Employee Break Reports","Daily break records, duration, status and attendance-linked employee history."],
       ["leave","Leave Reports","Leave balances, requests, decisions and utilization."],
       ["payroll","Payroll Reports","Payroll runs, totals and payment status."],
       ["salary","Salary Reports","Effective-dated salary and compensation history."],

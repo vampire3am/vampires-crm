@@ -1,0 +1,14 @@
+import{readFileSync}from"node:fs";import assert from"node:assert/strict";
+const migration=readFileSync("supabase/migrations/202609260001_employee_break_management.sql","utf8"),separation=readFileSync("supabase/migrations/202609260002_separate_employee_and_screen_breaks.sql","utf8"),service=readFileSync("src/services/breakService.ts","utf8"),hrmsService=readFileSync("src/services/hrmsService.ts","utf8"),widget=readFileSync("src/features/hrms/BreakWidget.tsx","utf8"),workspace=readFileSync("src/features/hrms/BreakManagementWorkspace.tsx","utf8"),permissions=readFileSync("src/features/admin/staffPermissionCatalog.ts","utf8"),access=readFileSync("src/features/hrms/hrmsAccess.ts","utf8"),dashboard=readFileSync("src/features/dashboard/ManagementDashboard.tsx","utf8");
+const staffFunction=readFileSync("supabase/functions/invite-staff/index.ts","utf8");
+for(const table of["hr_break_types","hr_work_break_logs","hr_work_break_audit"])assert.match(migration,new RegExp(table));
+for(const permission of["breaks.use","breaks.team_view","breaks.view_all","breaks.manage","break_types.manage","breaks.reports.view","breaks.export"])assert.ok(migration.includes(permission)&&permissions.includes(permission),`missing break permission ${permission}`);
+for(const fn of["hr_my_break_state","hr_start_break","hr_end_break","hr_manage_work_break","hr_save_break_type"])assert.match(migration,new RegExp(`function public\\.${fn}`));
+assert.match(migration,/unique index if not exists hr_work_break_one_active_per_employee[\s\S]*where status='ACTIVE'/);
+assert.match(migration,/Clock-out is authoritative[\s\S]*AUTO_CLOSED_CLOCK_OUT/);
+assert.match(migration,/security definer/);assert.match(migration,/server timestamps|now\(\)/i);assert.match(migration,/hr_break_daily_summary/);assert.match(migration,/hr_report_breaks/);
+assert.match(service,/crypto\.randomUUID/);assert.match(widget,/Currently On Break/);assert.match(widget,/Clock In to Enable Breaks/);assert.match(widget,/hrms-attendance-changed/);assert.match(widget,/End Break \/ Back to Work/);assert.match(hrmsService,/dispatchEvent\(new Event\("hrms-attendance-changed"\)\)/);assert.match(workspace,/Employee Break Records/);assert.match(workspace,/Correction reason/);assert.match(access,/"breaks"/);assert.match(dashboard,/<BreakWidget/);assert.match(dashboard,/hrms-attendance-changed/);
+assert.match(staffFunction,/\(\?:\\\.\[a-z_\]\+\)\+/);
+assert.match(separation,/record_category/);assert.match(separation,/LEGACY_SCREEN_AUDIT/);assert.match(separation,/SCREEN_WELLNESS/);assert.match(separation,/EMPLOYEE_BREAK/);assert.match(separation,/select role,'breaks\.use',true from unnest/);
+assert.match(service,/\.eq\("record_category","EMPLOYEE_BREAK"\)/);assert.match(hrmsService,/LEGACY_SCREEN_AUDIT/);assert.match(dashboard,/hasPermission\("breaks\.use"\)/);
+console.log("Phase 17 employee break management checks passed.");

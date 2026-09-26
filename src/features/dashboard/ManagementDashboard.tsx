@@ -44,6 +44,7 @@ import { notifyError, notifySuccess } from "../../components/common/CrmNotificat
 import { BsDateInput } from "../../components/ui/BsDateInput";
 import { LeaveAllocationPicker, type LeaveAllocation } from "../../components/ui/LeaveAllocationPicker";
 import { todayAd } from "../../lib/nepaliDate";
+import { BreakWidget } from "../hrms/BreakWidget";
 
 interface DashboardLeave {
   id: string;
@@ -52,7 +53,7 @@ interface DashboardLeave {
 
 export function ManagementDashboard() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, hasPermission } = useAuth();
   const [totalStudents, setTotalStudents] = useState(0);
   const [summary, setSummary] = useState({ counselling: 0, offers: 0, visaRatio: 0, revenue: 0 });
   const [trendData, setTrendData] = useState<DashboardTrendPoint[]>([]);
@@ -74,7 +75,7 @@ export function ManagementDashboard() {
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ allocations:[{leaveType:"Casual Leave",days:1}] as LeaveAllocation[], fromDate: "", toDate: "", days: 0, duration:"FULL_DAY" as "FULL_DAY"|"HALF_DAY", reason: "" });
   const canRequestLeave = Boolean(profile && profile.role !== "ADMIN");
-  const canUseAttendance = Boolean(profile && profile.role !== "ADMIN");
+  const canUseAttendance = Boolean(profile && (profile.role !== "ADMIN" || hasPermission("breaks.use")));
 
   const loadMyLeaves = async () => {
     if (!canRequestLeave) return;
@@ -178,7 +179,12 @@ export function ManagementDashboard() {
     };
   }, [dashboardRefreshKey]);
 
-  useEffect(() => { void loadMyAttendance(); }, [canUseAttendance]);
+  useEffect(() => {
+    void loadMyAttendance();
+    const refreshAttendance=()=>void loadMyAttendance();
+    window.addEventListener("hrms-attendance-changed",refreshAttendance);
+    return()=>window.removeEventListener("hrms-attendance-changed",refreshAttendance);
+  }, [canUseAttendance]);
   useEffect(() => { void loadMyLeaves(); }, [canRequestLeave]);
   useEffect(() => { const timer=setInterval(() => setAttendanceClock(value => value + 1), 60000); return () => clearInterval(timer); }, []);
 
@@ -262,6 +268,8 @@ export function ManagementDashboard() {
           {canRequestLeave && <button type="button" className="btn-secondary dashboard-leave-button" onClick={openLeaveModal}><CalendarDays size={15}/> Request Leave</button>}
         </div>
       </section>}
+
+      <BreakWidget />
 
       {showLeaveModal && canRequestLeave && <div className="modal-backdrop-clean" onClick={()=>setShowLeaveModal(false)}>
         <div className="modal-dialog-clean dashboard-leave-modal" onClick={event=>event.stopPropagation()}>
