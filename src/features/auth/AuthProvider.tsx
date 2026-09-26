@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
+import { recoverStaffRead, signInError, staffAccessError, withAuthTimeout } from "./authErrors";
 
 export type StaffRole =
   | "ADMIN"
@@ -105,6 +106,7 @@ interface AuthContextValue {
   effectivePermissions: string[];
   hasPermission: (permission: string) => boolean;
   loading: boolean;
+  authError: string;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<StaffProfile>) => Promise<void>;
@@ -118,21 +120,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<StaffProfile | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [effectivePermissions, setEffectivePermissions] = useState<string[]>([]);
+  const [authError, setAuthError] = useState("");
   const activeUserId = useRef<string | null>(null);
+  const sessionUserId = session?.user.id;
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
     let mounted = true;
-    void supabase.auth.getSession().then(({ data, error }) => {
-      if (!mounted) return;
-      if (error) console.error("Unable to restore staff session", error);
+    let receivedAuthEvent = false;
+    void withAuthTimeout(supabase.auth.getSession(), "Restoring your session timed out. Please reload and try again.").then(({ data, error }) => {
+      if (!mounted || receivedAuthEvent) return;
+      if (error) throw error;
       activeUserId.current = data.session?.user.id ?? null;
       setSession(data.session);
       setLoading(Boolean(data.session));
+    }).catch(() => {
+      if (!mounted || receivedAuthEvent) return;
+      setAuthError("Unable to restore your session. Please reload and try again.");
+      setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!mounted) return;
+      receivedAuthEvent = true;
       const nextUserId = nextSession?.user.id ?? null;
       const identityChanged = activeUserId.current !== nextUserId;
       activeUserId.current = nextUserId;
@@ -142,6 +153,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setEffectivePermissions([]);
         setLoading(false);
       } else if (identityChanged) {
+        setProfile(null);
+        setEffectivePermissions([]);
+        setAuthError("");
         // Only a real account change should block the workspace. Supabase can
         // emit SIGNED_IN/TOKEN_REFRESHED again when a background tab regains
         // focus; treating those events as a fresh login caused a full-page
@@ -157,34 +171,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!session || !isSupabaseConfigured) return;
+    if (!sessionUserId || !isSupabaseConfigured) return;
 
     let mounted = true;
-    void supabase
+    const isCurrent = () => mounted && activeUserId.current === sessionUserId;
+    const refresh = async () => {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error || !data.session) throw new Error("Your session could not be renewed. Choose Use another account and sign in again.");
+      if (data.session.user.id !== sessionUserId) throw new Error("Account changed while renewing your session.");
+    };
+    void recoverStaffRead(() => supabase
       .from("staff_profiles")
-      .select("id,full_name,email,role,is_active,job_title,branch,phone,department,avatar_bg")
-      .eq("id", session.user.id)
-      .single()
+      .select("*")
+      .eq("id", sessionUserId)
+      .maybeSingle(), refresh, isCurrent)
       .then(async ({ data, error }) => {
         if (!mounted) return;
-        if (error || !data?.is_active) {
-          setProfile(null);
-          await supabase.auth.signOut();
-        } else {
-          // Access customization was added after the core identity schema. Keep
-          // sign-in compatible while that migration is being rolled out.
-          const [{ data: access }, { data: effective }] = await Promise.all([
-            supabase.from("staff_profiles").select("desktop_modules,assigned_responsibilities,access_mode,inactivity_minutes").eq("id", session.user.id).maybeSingle(),
-            supabase.rpc("my_effective_permissions"),
-          ]);
-          setEffectivePermissions((effective ?? []).map((item: { permission_name: string }) => item.permission_name));
-          setProfile({ ...data, ...(access ?? {}), avatarBg: data.avatar_bg ?? undefined } as StaffProfile);
-        }
-        setLoading(false);
+        if (error) throw new Error(staffAccessError(error, "profile"));
+        if (!data) throw new Error("You signed in, but no staff profile is available for your account. Contact your administrator to link your staff account.");
+        if (!data?.is_active) throw new Error("Your staff account is inactive. Contact your administrator to restore access.");
+        const { data: effective, error: permissionError } = await recoverStaffRead(
+          () => supabase.rpc("my_effective_permissions"), refresh, isCurrent,
+        );
+        if (!mounted) return;
+        if (permissionError) throw new Error(staffAccessError(permissionError, "permissions"));
+        setEffectivePermissions((effective ?? []).map((item: { permission_name: string }) => item.permission_name));
+        setProfile({ ...data, avatarBg: data.avatar_bg ?? undefined } as StaffProfile);
+        setAuthError("");
+      }).catch((error: unknown) => {
+        if (!mounted) return;
+        setProfile(null);
+        setEffectivePermissions([]);
+        setAuthError(error instanceof Error ? error.message : "Unable to load your staff account. Please retry.");
+      }).finally(() => {
+        if (mounted) setLoading(false);
       });
 
     return () => { mounted = false; };
-  }, [session?.user.id]);
+  }, [sessionUserId]);
 
   useEffect(() => {
     if (!profile || !session) return;
@@ -210,23 +234,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     effectivePermissions,
     hasPermission: (permission: string) => effectivePermissions.includes(permission),
     loading,
+    authError,
     signIn: async (email: string, password: string) => {
       if (!isSupabaseConfigured) {
         throw new Error("Authentication is not configured. Add the Supabase URL and publishable key to the environment.");
       }
+      setAuthError("");
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
-      if (error || !data.session) throw new Error("Invalid staff email or password.");
-      setSession(data.session);
-      setLoading(true);
+      if (error) throw new Error(signInError(error));
+      if (!data.session) throw new Error("Sign-in did not return a session. Please try again.");
+      // The auth event owns session transitions. Setting loading here again
+      // can strand a same-user sign-in after its profile has already loaded.
     },
     signOut: async () => {
-      if (isSupabaseConfigured) await supabase.auth.signOut();
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.auth.signOut({ scope: "local" });
+        if (error) { setAuthError("Unable to sign out. Please retry."); return; }
+      }
       setProfile(null);
       setSession(null);
       setEffectivePermissions([]);
+      setAuthError("");
     },
     updateProfile: async updates => {
       if (!profile) throw new Error("No authenticated staff profile.");
@@ -239,7 +270,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       setProfile(current => current ? { ...current, ...updates } : current);
     },
-  }), [session, profile, rolePermissions, effectivePermissions, loading]);
+  }), [session, profile, rolePermissions, effectivePermissions, loading, authError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

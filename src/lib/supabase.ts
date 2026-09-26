@@ -23,9 +23,16 @@ const mutationRpc = /^(create|update|delete|register|review|mark|send|toggle|add
 const humanize = (value: string) => value.replace(/[_-]+/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
 
 const crmFetch: typeof fetch = async (input, init) => {
-  const response = await fetch(input, init);
-  if (!response.ok || typeof window === "undefined") return response;
   const requestUrl = typeof input === "string" || input instanceof URL ? String(input) : input.url;
+  // Abort the actual request so a stalled password login cannot keep the
+  // submit button busy indefinitely or complete after a UI-only timeout.
+  const passwordLogin = /\/auth\/v1\/token\?grant_type=password(?:&|$)/.test(requestUrl);
+  const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+  const response = await fetch(input, passwordLogin ? {
+    ...init,
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+  } : init);
+  if (!response.ok || typeof window === "undefined") return response;
   const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
   const parsed = new URL(requestUrl, window.location.origin);
   const rpcName = parsed.pathname.match(/\/rest\/v1\/rpc\/([^/?]+)/)?.[1] ?? "";

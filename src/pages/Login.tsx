@@ -1,12 +1,12 @@
 import { ArrowRight, Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
+import { AuthStatus } from "../features/auth/AuthStatus";
 import { useAuth } from "../features/auth/AuthProvider";
 import { isSupabaseConfigured } from "../lib/supabase";
 
 export function Login() {
-  const { session, signIn } = useAuth();
-  const navigate = useNavigate();
+  const { session, profile, loading, authError, signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -14,7 +14,8 @@ export function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (session) return <Navigate to="/dashboard" replace />;
+  if (loading || (session && (!profile || authError))) return <AuthStatus />;
+  if (session && profile) return <Navigate to="/dashboard" replace />;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -27,7 +28,6 @@ export function Login() {
     }
     try {
       await signIn(email, password);
-      navigate("/dashboard");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Authentication failed. Please verify your staff credentials.");
     } finally {
@@ -85,7 +85,7 @@ export function Login() {
                 <span className="login-help-text">Forgot password? Contact your administrator.</span>
               </div>
 
-              {error && <div className="login-error-banner" role="alert"><ShieldAlert size={16} /><span>{error}</span></div>}
+              {(error || authError) && <div className="login-error-banner" role="alert"><ShieldAlert size={16} /><span>{error || authError}</span></div>}
 
               <button type="submit" className="login-submit-btn" disabled={busy || !isSupabaseConfigured}>
                 <span>{busy ? "Signing in…" : "Sign In"}</span>{!busy && <ArrowRight size={16} />}
