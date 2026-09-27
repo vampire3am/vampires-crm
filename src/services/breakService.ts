@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { generateUuid } from "../lib/generateUuid";
 
 export type BreakStatus="ACTIVE"|"COMPLETED"|"CANCELLED"|"MANUALLY_ADJUSTED";
 export interface BreakType {id:string;code:string;name:string;isActive:boolean;sortOrder:number}
@@ -13,7 +14,7 @@ export interface BreakRecord {
   workDate:string;startedAt:string;endedAt:string|null;actualSeconds:number|null;status:BreakStatus;source:"AUTOMATIC"|"MANUAL";remarks:string|null;
 }
 
-const requestId=()=>crypto.randomUUID();
+const requestId=()=>generateUuid();
 const mapType=(row:Record<string,unknown>):BreakType=>({id:String(row.id),code:String(row.code),name:String(row.name),isActive:Boolean(row.is_active),sortOrder:Number(row.sort_order)});
 
 export const BreakService={

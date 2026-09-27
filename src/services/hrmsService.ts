@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { generateUuid } from "../lib/generateUuid";
 import { adToBs, formatBsDate, formatBsPeriod } from "../lib/nepaliDate";
 
 const dateLabel=(value:string)=>formatBsDate(value);
@@ -58,7 +59,7 @@ export const HrmsService={
  async savePerformanceTarget(payload:Record<string,unknown>){const{error}=await supabase.rpc("hr_save_performance_target",{payload});if(error)throw error},
  async createPerformanceReview(payload:Record<string,unknown>){const{error}=await supabase.rpc("hr_create_performance_review",{payload});if(error)throw error},
  async getStaffDocuments(){const{data,error}=await supabase.from("hr_staff_documents").select("*,hr_employees(employee_code,full_name)").order("created_at",{ascending:false});if(error)throw error;return(data??[]).map(d=>({...d,empCode:d.hr_employees?.employee_code??"—",fullName:d.hr_employees?.full_name??"Unknown"}))},
- async uploadStaffDocument(employeeId:string,documentType:string,file:File,expiresOn?:string){const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");const storagePath=`${employeeId}/${crypto.randomUUID()}-${safeName}`;const upload=await supabase.storage.from("hr-staff-documents").upload(storagePath,file,{contentType:file.type,upsert:false});if(upload.error)throw upload.error;const registered=await supabase.rpc("hr_register_staff_document",{payload:{employee_id:employeeId,document_type:documentType,file_name:file.name,storage_path:storagePath,expires_on:expiresOn??null,file_size:file.size,mime_type:file.type}});if(registered.error){await supabase.storage.from("hr-staff-documents").remove([storagePath]);throw registered.error}return registered.data as string},
+ async uploadStaffDocument(employeeId:string,documentType:string,file:File,expiresOn?:string){const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");const storagePath=`${employeeId}/${generateUuid()}-${safeName}`;const upload=await supabase.storage.from("hr-staff-documents").upload(storagePath,file,{contentType:file.type,upsert:false});if(upload.error)throw upload.error;const registered=await supabase.rpc("hr_register_staff_document",{payload:{employee_id:employeeId,document_type:documentType,file_name:file.name,storage_path:storagePath,expires_on:expiresOn??null,file_size:file.size,mime_type:file.type}});if(registered.error){await supabase.storage.from("hr-staff-documents").remove([storagePath]);throw registered.error}return registered.data as string},
  async openStaffDocument(storagePath:string){const{data,error}=await supabase.storage.from("hr-staff-documents").createSignedUrl(storagePath,120);if(error)throw error;return data.signedUrl},
  async verifyStaffDocument(id:string,decision:"VERIFIED"|"REJECTED",note?:string){const{error}=await supabase.rpc("hr_verify_staff_document",{document_uuid:id,decision,note:note??null});if(error)throw error},
 };
