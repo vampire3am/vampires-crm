@@ -93,7 +93,7 @@ function crmSyncPlugin(): Plugin {
     fs.writeFileSync(callsFile, JSON.stringify(calls, null, 2), "utf-8");
   }
 
-  return {
+  const plugin = {
     name: "vite-plugin-crm-sync",
     configureServer(server) {
       server.middlewares.use((req: any, res: any, next: any) => {
@@ -760,6 +760,11 @@ function crmSyncPlugin(): Plugin {
         next();
       });
     },
+  } satisfies Plugin;
+
+  return {
+    ...plugin,
+    configurePreviewServer: plugin.configureServer,
   };
 }
 
@@ -768,6 +773,12 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5173,
+    cors: true,
+  },
+  preview: {
+    host: "0.0.0.0",
+    port: 80,
+    strictPort: true,
     cors: true,
   },
   build: {

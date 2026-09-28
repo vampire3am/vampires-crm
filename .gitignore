@@ -62,3 +62,5 @@ data/*.json
 /.preview-manual/
 /.npm-cache-hrms/
 /.codex-payroll-deploy/
+/.aecs-server-task.cmd
+/logs/
