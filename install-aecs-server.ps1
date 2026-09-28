@@ -16,6 +16,14 @@ $taskRunner = Join-Path $repoRoot ".aecs-server-task.cmd"
 $logDirectory = Join-Path $repoRoot "logs"
 $logPath = Join-Path $logDirectory "server.log"
 
+$existingListener = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue
+if ($existingListener) {
+  $processNames = $existingListener |
+    ForEach-Object { Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue } |
+    Select-Object -ExpandProperty ProcessName -Unique
+  throw "Port 80 is already in use by: $($processNames -join ', '). Stop or reconfigure that web server before installing AECS CRM."
+}
+
 Push-Location $repoRoot
 try {
   npm.cmd ci
