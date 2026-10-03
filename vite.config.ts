@@ -99,6 +99,17 @@ function crmSyncPlugin(): Plugin {
       server.middlewares.use((req: any, res: any, next: any) => {
         const url = req.url?.split("?")[0] || "";
 
+        // HTML and client-side routes must always revalidate after a deployment.
+        // Open tabs that reference an older asset hash are recovered by the
+        // vite:preloadError handler in main.tsx.
+        if (req.method === "GET") {
+          if (url === "/" || url.endsWith(".html") || !path.extname(url)) {
+            res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+            res.setHeader("Pragma", "no-cache");
+            res.setHeader("Expires", "0");
+          }
+        }
+
         // 1. SSE Real-Time Event Stream across LAN
         if (url === "/api/sync/events") {
           res.writeHead(200, {
@@ -780,6 +791,11 @@ export default defineConfig({
     port: 80,
     strictPort: true,
     cors: true,
+    headers: {
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
   },
   build: {
     target: "es2020",

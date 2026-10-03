@@ -49,6 +49,9 @@ import "./styles/live-reports.css";
 import "./styles/assignments-workspace.css";
 import "./styles/account-security.css";
 import { ErrorBoundary } from "./core/error/ErrorBoundary";
+import { installStaleBuildRecovery } from "./core/updateRecovery";
+
+installStaleBuildRecovery();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

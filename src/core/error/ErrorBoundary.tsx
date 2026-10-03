@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { supabase } from "../../lib/supabase";
+import { forceWorkspaceRefresh, recoverFromStaleBuild } from "../updateRecovery";
 
 export class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -12,6 +13,7 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    if (recoverFromStaleBuild(error)) return;
     console.error("AECS application error", error, info);
     void supabase.rpc("record_client_error", {
       error_message: error.message,
@@ -29,7 +31,7 @@ export class ErrorBoundary extends Component<
       <main className="fatal-error" role="alert">
         <h1>Something went wrong</h1>
         <p>{this.state.message}</p>
-        <button onClick={() => location.reload()}>Reload workspace</button>
+        <button onClick={forceWorkspaceRefresh}>Reload updated workspace</button>
       </main>
     );
   }
