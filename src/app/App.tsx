@@ -50,6 +50,9 @@ const AnalyticsDashboard = lazy(() =>
 const AdminDashboard = lazy(() =>
   import("../features/admin/AdminDashboard").then(m => ({ default: m.AdminDashboard }))
 );
+const AccountSecurity = lazy(() =>
+  import("../features/auth/AccountSecurity").then(m => ({ default: m.AccountSecurity }))
+);
 const HrmsWorkspace = lazy(() =>
   import("../features/hrms/HrmsWorkspace").then(m => ({ default: m.HrmsWorkspace }))
 );
@@ -130,6 +133,7 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<ManagementDashboard />} />
+            <Route path="/account-security" element={<AccountSecurity />} />
             
             {/* Leads Workspace */}
             <Route

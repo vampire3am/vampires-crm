@@ -1,7 +1,8 @@
 import type { Session } from "@supabase/supabase-js";
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { recoverStaffRead, signInError, staffAccessError, withAuthTimeout } from "./authErrors";
+import { readMfaState, verifyMfaFactor, type MfaFactor } from "./mfaService";
 
 export type StaffRole =
   | "ADMIN"
@@ -107,7 +108,12 @@ interface AuthContextValue {
   hasPermission: (permission: string) => boolean;
   loading: boolean;
   authError: string;
+  mfaStatus: "checking" | "not_enrolled" | "required" | "verified";
+  mfaFactors: MfaFactor[];
+  mfaRequired: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  verifyMfa: (code: string, factorId?: string) => Promise<void>;
+  refreshMfa: () => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<StaffProfile>) => Promise<void>;
 }
@@ -121,8 +127,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [effectivePermissions, setEffectivePermissions] = useState<string[]>([]);
   const [authError, setAuthError] = useState("");
+  const [mfaStatus, setMfaStatus] = useState<AuthContextValue["mfaStatus"]>("checking");
+  const [mfaFactors, setMfaFactors] = useState<MfaFactor[]>([]);
   const activeUserId = useRef<string | null>(null);
   const sessionUserId = session?.user.id;
+
+  const refreshMfa = useCallback(async () => {
+    const userId = activeUserId.current;
+    if (!userId) {
+      setMfaFactors([]);
+      setMfaStatus("checking");
+      return;
+    }
+    const state = await readMfaState();
+    if (activeUserId.current !== userId) return;
+    setMfaFactors(state.factors);
+    setMfaStatus(state.requiresChallenge ? "required" : state.factors.length ? "verified" : "not_enrolled");
+    if (state.requiresChallenge) setLoading(false);
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -151,11 +173,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!nextSession) {
         setProfile(null);
         setEffectivePermissions([]);
+        setMfaFactors([]);
+        setMfaStatus("checking");
         setLoading(false);
       } else if (identityChanged) {
         setProfile(null);
         setEffectivePermissions([]);
         setAuthError("");
+        setMfaFactors([]);
+        setMfaStatus("checking");
         // Only a real account change should block the workspace. Supabase can
         // emit SIGNED_IN/TOKEN_REFRESHED again when a background tab regains
         // focus; treating those events as a fresh login caused a full-page
@@ -172,6 +198,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!sessionUserId || !isSupabaseConfigured) return;
+    let mounted = true;
+    void readMfaState().then(state => {
+      if (!mounted || activeUserId.current !== sessionUserId) return;
+      setMfaFactors(state.factors);
+      setMfaStatus(state.requiresChallenge ? "required" : state.factors.length ? "verified" : "not_enrolled");
+      if (state.requiresChallenge) setLoading(false);
+    }).catch((error: unknown) => {
+      if (!mounted || activeUserId.current !== sessionUserId) return;
+      setAuthError(error instanceof Error ? error.message : "Unable to verify two-factor authentication.");
+      setLoading(false);
+    });
+    return () => { mounted = false; };
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId || !isSupabaseConfigured || mfaStatus === "checking" || mfaStatus === "required") return;
 
     let mounted = true;
     const isCurrent = () => mounted && activeUserId.current === sessionUserId;
@@ -208,7 +250,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
     return () => { mounted = false; };
-  }, [sessionUserId]);
+  }, [sessionUserId, mfaStatus]);
 
   useEffect(() => {
     if (!profile || !session) return;
@@ -240,6 +282,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     hasPermission: (permission: string) => effectivePermissions.includes(permission),
     loading,
     authError,
+    mfaStatus,
+    mfaFactors,
+    mfaRequired: mfaStatus === "required",
     signIn: async (email: string, password: string) => {
       if (!isSupabaseConfigured) {
         throw new Error("Authentication is not configured. Add the Supabase URL and publishable key to the environment.");
@@ -254,6 +299,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // The auth event owns session transitions. Setting loading here again
       // can strand a same-user sign-in after its profile has already loaded.
     },
+    verifyMfa: async (code: string, factorId?: string) => {
+      const selected = factorId || mfaFactors[0]?.id;
+      if (!selected) throw new Error("No verified authenticator is available for this account.");
+      await verifyMfaFactor(selected, code);
+      await refreshMfa();
+    },
+    refreshMfa,
     signOut: async () => {
       if (isSupabaseConfigured) {
         const { error } = await supabase.auth.signOut({ scope: "local" });
@@ -262,6 +314,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       setSession(null);
       setEffectivePermissions([]);
+      setMfaFactors([]);
+      setMfaStatus("checking");
       setAuthError("");
     },
     updateProfile: async updates => {
@@ -275,7 +329,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       setProfile(current => current ? { ...current, ...updates } : current);
     },
-  }), [session, profile, rolePermissions, effectivePermissions, loading, authError]);
+  }), [session, profile, rolePermissions, effectivePermissions, loading, authError, mfaStatus, mfaFactors, refreshMfa]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

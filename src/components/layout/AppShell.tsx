@@ -717,6 +717,18 @@ export function AppShell() {
                     <span>My Private Messages</span>
                   </button>
 
+                  <button
+                    type="button"
+                    style={{ width: "100%", textAlign: "left", padding: "8px 10px", background: "none", border: "none", fontSize: "12px", color: "var(--text-main)", cursor: "pointer", borderRadius: "6px", display: "flex", alignItems: "center", gap: "8px" }}
+                    onClick={() => {
+                      setProfileOpen(false);
+                      navigate("/account-security");
+                    }}
+                  >
+                    <ShieldCheck size={13} style={{ color: "var(--accent-orange)" }} />
+                    <span>Authenticator Security</span>
+                  </button>
+
                   {permissions.settings && (
                     <button
                       type="button"

@@ -47,6 +47,7 @@ import "./styles/dashboard-usability.css";
 import "./styles/employee-monthly-report.css";
 import "./styles/live-reports.css";
 import "./styles/assignments-workspace.css";
+import "./styles/account-security.css";
 import { ErrorBoundary } from "./core/error/ErrorBoundary";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

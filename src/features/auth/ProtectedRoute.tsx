@@ -3,14 +3,14 @@ import { useAuth } from "./AuthProvider";
 import { AuthStatus } from "./AuthStatus";
 
 export function ProtectedRoute() {
-  const { session, profile, loading, authError } = useAuth();
+  const { session, profile, loading, authError, mfaStatus, mfaRequired } = useAuth();
 
-  if (loading || authError) {
+  if (loading || (session && mfaStatus === "checking") || authError) {
     return <AuthStatus />;
   }
 
   // Strict check: No session -> Must redirect to Login page
-  if (!session || !profile) {
+  if (!session || !profile || mfaRequired) {
     return <Navigate to="/login" replace />;
   }
 

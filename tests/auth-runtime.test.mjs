@@ -35,6 +35,8 @@ async function setup(t, overrides = {}) {
   let state;
   let signOutCalls = 0;
   let profileReads = 0;
+  let mfaReads = 0;
+  let mfaVerifyCalls = 0;
   const client = {
     auth: {
       getSession: overrides.getSession ?? (async () => ({ data: { session: null }, error: null })),
@@ -54,12 +56,16 @@ async function setup(t, overrides = {}) {
   };
   const provider = loadSource("features/auth/AuthProvider.tsx", {
     "../../lib/supabase": { isSupabaseConfigured: true, supabase: client }, "./authErrors": errors,
+    "./mfaService": {
+      readMfaState: async () => overrides.mfaState?.(++mfaReads) ?? ({ factors: [], currentLevel: "aal1", requiresChallenge: false }),
+      verifyMfaFactor: async (factorId, code) => { mfaVerifyCalls++; return overrides.verifyMfa?.(factorId, code); },
+    },
   });
   function Probe() { state = provider.useAuth(); return null; }
   let tree;
   await act(async () => { tree = create(React.createElement(provider.AuthProvider, null, React.createElement(Probe))); });
   t.after(async () => { await act(async () => tree.unmount()); });
-  return { get state() { return state; }, get signOutCalls() { return signOutCalls; }, get profileReads() { return profileReads; },
+  return { get state() { return state; }, get signOutCalls() { return signOutCalls; }, get profileReads() { return profileReads; }, get mfaVerifyCalls() { return mfaVerifyCalls; },
     async emit(next) { await act(async () => listener("SIGNED_IN", next)); },
   };
 }
@@ -73,6 +79,21 @@ test("valid login loads staff and permissions; repeated sign-in does not strand 
   await act(async () => h.state.signIn("staff@example.com", "test-only"));
   assert.equal(h.state.loading, false);
   assert.equal(h.profileReads, 1);
+});
+
+test("verified authenticator blocks staff data until the second factor succeeds", async t => {
+  const factor = { id: "totp-one", factor_type: "totp", status: "verified", friendly_name: "Work phone" };
+  const h = await setup(t, {
+    mfaState: read => ({ factors: [factor], currentLevel: read === 1 ? "aal1" : "aal2", requiresChallenge: read === 1 }),
+  });
+  await h.emit(session("one"));
+  assert.equal(h.state.mfaRequired, true);
+  assert.equal(h.state.profile, null);
+  assert.equal(h.profileReads, 0);
+  await act(async () => h.state.verifyMfa("123456"));
+  assert.equal(h.mfaVerifyCalls, 1);
+  assert.equal(h.state.mfaRequired, false);
+  assert.equal(h.state.profile.id, "one");
 });
 
 test("late session restoration cannot overwrite a newer successful login", async t => {
@@ -198,8 +219,8 @@ test("permission errors do not refresh and account switches cancel recovery", as
   assert.equal(reads, 1);
 });
 
-test("protected routes require both a session and a validated staff profile", async () => {
-  let auth = { session: session("one"), profile: null, loading: false, authError: "Staff profile unavailable" };
+test("protected routes require both a session, MFA, and a validated staff profile", async () => {
+  let auth = { session: session("one"), profile: null, loading: false, authError: "Staff profile unavailable", mfaStatus: "verified", mfaRequired: false };
   const { ProtectedRoute } = loadSource("features/auth/ProtectedRoute.tsx", {
     "./AuthProvider": { useAuth: () => auth },
     "./AuthStatus": { AuthStatus: () => React.createElement("p", null, "Account check failed") },
@@ -215,5 +236,8 @@ test("protected routes require both a session and a validated staff profile", as
   auth = { ...auth, profile: staff("one") };
   await act(async () => tree.update(render()));
   assert.match(JSON.stringify(tree.toJSON()), /Private CRM/);
+  auth = { ...auth, mfaStatus: "required", mfaRequired: true };
+  await act(async () => tree.update(render()));
+  assert.match(JSON.stringify(tree.toJSON()), /Login/);
   await act(async () => tree.unmount());
 });

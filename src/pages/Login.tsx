@@ -1,4 +1,4 @@
-import { ArrowRight, Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, KeyRound, Lock, Mail, ShieldAlert } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { AuthStatus } from "../features/auth/AuthStatus";
@@ -6,15 +6,61 @@ import { useAuth } from "../features/auth/AuthProvider";
 import { isSupabaseConfigured } from "../lib/supabase";
 
 export function Login() {
-  const { session, profile, loading, authError, signIn } = useAuth();
+  const { session, profile, loading, authError, mfaStatus, mfaRequired, mfaFactors, signIn, signOut, verifyMfa } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
 
-  if (loading || (session && (!profile || authError))) return <AuthStatus />;
+  if (loading || (session && mfaStatus === "checking")) return <AuthStatus />;
+  if (session && mfaRequired) {
+    const submitMfa = async (event: FormEvent) => {
+      event.preventDefault();
+      setBusy(true);
+      setError("");
+      try {
+        await verifyMfa(mfaCode);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Authenticator verification failed.");
+      } finally {
+        setBusy(false);
+      }
+    };
+    return (
+      <main className="login-portal-wrapper">
+        <section className="mfa-challenge-card" aria-label="Two-factor authentication">
+          <div className="mfa-challenge-icon"><KeyRound size={28} /></div>
+          <p className="mfa-eyebrow">TWO-FACTOR AUTHENTICATION</p>
+          <h1>Authenticator verification</h1>
+          <p>Open your authenticator app and enter the current 6-digit code for <strong>{mfaFactors[0]?.friendly_name || "AECS CRM"}</strong>.</p>
+          <form onSubmit={submitMfa}>
+            <label htmlFor="mfa-code">One-time code</label>
+            <input
+              id="mfa-code"
+              className="mfa-code-input"
+              value={mfaCode}
+              onChange={event => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              placeholder="000000"
+              autoFocus
+              required
+            />
+            {error && <div className="login-error-banner" role="alert"><ShieldAlert size={16} /><span>{error}</span></div>}
+            <button type="submit" className="login-submit-btn" disabled={busy || mfaCode.length !== 6}>
+              <span>{busy ? "Verifying…" : "Verify and enter CRM"}</span>{!busy && <ArrowRight size={16} />}
+            </button>
+          </form>
+          <button type="button" className="mfa-use-another" onClick={() => void signOut()}>Use another account</button>
+        </section>
+      </main>
+    );
+  }
+  if (session && (!profile || authError)) return <AuthStatus />;
   if (session && profile) return <Navigate to="/dashboard" replace />;
 
   async function submit(event: FormEvent) {
