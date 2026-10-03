@@ -3,6 +3,7 @@ import { CountryDisplay } from "../../components/ui/CountryDisplay";
 import {
   AlertCircle,
   Archive,
+  ArrowLeft,
   ArrowRight,
   AtSign,
   Award,
@@ -160,6 +161,7 @@ export function MessagesWorkspace() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showInfoSidebar, setShowInfoSidebar] = useState(true);
+  const [mobileChatVisible, setMobileChatVisible] = useState(false);
   const [showEmojiTray, setShowEmojiTray] = useState(false);
   const [outgoingCallSession, setOutgoingCallSession] = useState<ActiveCallSession | null>(null);
   const[alertsEnabled,setAlertsEnabled]=useState(()=>"Notification" in window&&Notification.permission==="granted");
@@ -181,6 +183,8 @@ export function MessagesWorkspace() {
     setActiveRecipientId(id);
     localStorage.setItem("aecs_active_chat_recipient", id);
     localStorage.removeItem("aecs_active_chat_channel");
+    setMobileChatVisible(true);
+    if (window.matchMedia("(max-width: 760px)").matches) setShowInfoSidebar(false);
   };
 
   const handleSelectChannel = (id: string) => {
@@ -188,6 +192,8 @@ export function MessagesWorkspace() {
     setActiveChannelId(id);
     localStorage.setItem("aecs_active_chat_channel", id);
     localStorage.removeItem("aecs_active_chat_recipient");
+    setMobileChatVisible(true);
+    if (window.matchMedia("(max-width: 760px)").matches) setShowInfoSidebar(false);
   };
 
   // Load chat messages
@@ -443,7 +449,7 @@ export function MessagesWorkspace() {
 
   return (
     <div className="page-container messages-page">
-      <div className="messenger-container">
+      <div className={`messenger-container ${mobileChatVisible ? "mobile-chat-visible" : "mobile-list-visible"}`}>
         {/* =========================================================================
             PANE 1: LEFT CHATS SIDEBAR (MESSENGER STYLE)
             ========================================================================= */}
@@ -594,6 +600,9 @@ export function MessagesWorkspace() {
         <div className="messenger-main">
           {/* Header Bar */}
           <div className="messenger-main-header">
+            <button type="button" className="messenger-mobile-back" onClick={() => { setMobileChatVisible(false); setShowInfoSidebar(false); }} aria-label="Back to conversations">
+              <ArrowLeft size={19} />
+            </button>
             <div className="messenger-main-header-info">
               {activeRecipientId ? (
                 <>

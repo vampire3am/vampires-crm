@@ -164,6 +164,7 @@ export function AppShell() {
     if (location.pathname.startsWith("/assignments")) return "Staff Assignments & Completion Reports";
     if (location.pathname.startsWith("/todos")) return "To-Do List";
     if (location.pathname.startsWith("/settings")) return "System Settings & RBAC";
+    if (location.pathname.startsWith("/account-security")) return "Authenticator Security";
     return "Operations Workspace";
   }, [location.pathname]);
 
@@ -233,6 +234,14 @@ export function AppShell() {
       )}
       {/* Advanced Enterprise Sidebar Matching Image 4 */}
       <aside className={`app-sidebar ${mobileOpen ? "mobile-open" : ""}`}>
+        <button
+          type="button"
+          className="sidebar-mobile-close"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileOpen(false)}
+        >
+          <X size={20} />
+        </button>
         <div className="sidebar-brand">
           <div className="sidebar-logo">
             <img src="/abroad-logo-new.png" alt="AECS CRM" />
