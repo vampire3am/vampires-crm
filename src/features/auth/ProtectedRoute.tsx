@@ -10,7 +10,7 @@ export function ProtectedRoute() {
   }
 
   // Strict check: No session -> Must redirect to Login page
-  if (!session || !profile || mfaRequired) {
+  if (!session || !profile || mfaRequired || mfaStatus === "not_enrolled") {
     return <Navigate to="/login" replace />;
   }
 

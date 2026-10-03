@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (activeUserId.current !== userId) return;
     setMfaFactors(state.factors);
     setMfaStatus(state.requiresChallenge ? "required" : state.factors.length ? "verified" : "not_enrolled");
-    if (state.requiresChallenge) setLoading(false);
+    if (state.requiresChallenge || state.factors.length === 0) setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -203,7 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!mounted || activeUserId.current !== sessionUserId) return;
       setMfaFactors(state.factors);
       setMfaStatus(state.requiresChallenge ? "required" : state.factors.length ? "verified" : "not_enrolled");
-      if (state.requiresChallenge) setLoading(false);
+      if (state.requiresChallenge || state.factors.length === 0) setLoading(false);
     }).catch((error: unknown) => {
       if (!mounted || activeUserId.current !== sessionUserId) return;
       setAuthError(error instanceof Error ? error.message : "Unable to verify two-factor authentication.");

@@ -34,10 +34,11 @@ export async function readMfaState() {
   ]);
   if (factorsError) throw new Error(mfaError(factorsError, "Unable to read your authenticator settings. Please retry."));
   if (assuranceError) throw new Error(mfaError(assuranceError, "Unable to verify the security level of this session. Please sign in again."));
+  const verifiedFactors = factors.totp.filter(factor => factor.status === "verified");
   return {
-    factors: factors.totp,
+    factors: verifiedFactors,
     currentLevel: assurance.currentLevel,
-    requiresChallenge: factors.totp.length > 0 && assurance.currentLevel !== "aal2",
+    requiresChallenge: verifiedFactors.length > 0 && assurance.currentLevel !== "aal2",
   };
 }
 
@@ -50,6 +51,12 @@ export async function verifyMfaFactor(factorId: string, code: string) {
 
 export async function beginMfaEnrollment(friendlyName: string): Promise<MfaEnrollment> {
   const name = friendlyName.trim() || "AECS CRM Authenticator";
+  const { data: existing, error: listError } = await supabase.auth.mfa.listFactors();
+  if (listError) throw new Error(mfaError(listError, "Unable to prepare authenticator setup. Please retry."));
+  for (const factor of existing.all.filter(item => item.factor_type === "totp" && item.status === "unverified")) {
+    const { error: cleanupError } = await supabase.auth.mfa.unenroll({ factorId: factor.id });
+    if (cleanupError) throw new Error(mfaError(cleanupError, "Unable to reset the previous unfinished authenticator setup. Please sign in again."));
+  }
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: "totp",
     friendlyName: name,

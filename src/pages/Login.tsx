@@ -1,12 +1,13 @@
-import { ArrowRight, Eye, EyeOff, KeyRound, Lock, Mail, ShieldAlert } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, KeyRound, Loader2, Lock, Mail, ShieldAlert, ShieldCheck, Smartphone } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { AuthStatus } from "../features/auth/AuthStatus";
 import { useAuth } from "../features/auth/AuthProvider";
+import { beginMfaEnrollment, removeMfaFactor, verifyMfaFactor, type MfaEnrollment } from "../features/auth/mfaService";
 import { isSupabaseConfigured } from "../lib/supabase";
 
 export function Login() {
-  const { session, profile, loading, authError, mfaStatus, mfaRequired, mfaFactors, signIn, signOut, verifyMfa } = useAuth();
+  const { session, profile, loading, authError, mfaStatus, mfaRequired, mfaFactors, signIn, signOut, verifyMfa, refreshMfa } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -14,8 +15,93 @@ export function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
+  const [enrollment, setEnrollment] = useState<MfaEnrollment | null>(null);
 
   if (loading || (session && mfaStatus === "checking")) return <AuthStatus />;
+  if (session && mfaStatus === "not_enrolled") {
+    const beginEnrollment = async () => {
+      setBusy(true);
+      setError("");
+      try {
+        setEnrollment(await beginMfaEnrollment("Login authenticator"));
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Unable to start authenticator setup.");
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    const activateEnrollment = async (event: FormEvent) => {
+      event.preventDefault();
+      if (!enrollment) return;
+      setBusy(true);
+      setError("");
+      try {
+        await verifyMfaFactor(enrollment.id, mfaCode);
+        await refreshMfa();
+        setEnrollment(null);
+        setMfaCode("");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Unable to verify this authenticator.");
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    const useAnotherAccount = async () => {
+      setBusy(true);
+      try {
+        if (enrollment) await removeMfaFactor(enrollment.id);
+      } catch {
+        // Signing out still safely abandons this authenticated setup session.
+      } finally {
+        await signOut();
+        setBusy(false);
+      }
+    };
+
+    return (
+      <main className="login-portal-wrapper">
+        <section className="mfa-login-setup-card" aria-label="Set up two-factor authentication">
+          <div className="mfa-challenge-icon"><Smartphone size={28} /></div>
+          <p className="mfa-eyebrow">REQUIRED ACCOUNT PROTECTION</p>
+          <h1>Set up your authenticator</h1>
+          <p>Before entering the CRM, connect Google Authenticator, Microsoft Authenticator, Authy, or another TOTP app for <strong>{session.user.email}</strong>.</p>
+
+          {!enrollment ? (
+            <div className="mfa-login-intro">
+              <div><ShieldCheck size={18} /><span>Your password has been accepted. The next step protects this staff account with a changing 6-digit code.</span></div>
+              {error && <div className="login-error-banner" role="alert"><ShieldAlert size={16} /><span>{error}</span></div>}
+              <button type="button" className="login-submit-btn" onClick={() => void beginEnrollment()} disabled={busy}>
+                <span>{busy ? "Preparing setup…" : "Set up authenticator"}</span>{busy ? <Loader2 className="spin" size={16} /> : <ArrowRight size={16} />}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="mfa-enrollment-copy"><span>STEP 1</span><h2>Scan this QR code</h2><p>Open your authenticator app, add an account, and scan this code.</p></div>
+              <div className="mfa-setup-grid mfa-login-setup-grid">
+                <img className="mfa-qr-code" src={enrollment.qrCode} alt="Authenticator setup QR code" />
+                <div className="mfa-manual-setup">
+                  <label htmlFor="login-mfa-secret">Cannot scan? Enter this setup key</label>
+                  <input id="login-mfa-secret" value={enrollment.secret} readOnly onFocus={event => event.currentTarget.select()} />
+                  <small>Account: {session.user.email}<br />Type: Time based (TOTP)</small>
+                </div>
+              </div>
+              <form onSubmit={activateEnrollment} className="mfa-login-activate-form">
+                <label htmlFor="login-mfa-activation-code">STEP 2 · Enter the current 6-digit code</label>
+                <input id="login-mfa-activation-code" className="mfa-code-input" value={mfaCode} onChange={event => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" placeholder="000000" autoFocus required />
+                {error && <div className="login-error-banner" role="alert"><ShieldAlert size={16} /><span>{error}</span></div>}
+                <button type="submit" className="login-submit-btn" disabled={busy || mfaCode.length !== 6}>
+                  <span>{busy ? "Activating…" : "Activate and enter CRM"}</span>{busy ? <Loader2 className="spin" size={16} /> : <ArrowRight size={16} />}
+                </button>
+              </form>
+            </>
+          )}
+          <button type="button" className="mfa-use-another" onClick={() => void useAnotherAccount()} disabled={busy}>Use another account</button>
+        </section>
+      </main>
+    );
+  }
   if (session && mfaRequired) {
     const submitMfa = async (event: FormEvent) => {
       event.preventDefault();
