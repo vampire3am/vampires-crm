@@ -90,6 +90,13 @@ export const STAFF_PERMISSION_GROUPS: PermissionGroup[] = [
     { key: "hr.reports.view", label: "View the nine HRMS report groups" },
     { key: "hr.reports.export", label: "Export HRMS reports" },
   ]},
+  { id: "attendance-devices", label: "Biometric attendance devices", module: "hrms", permissions: [
+    { key: "attendance.device.view", label: "View biometric device health" },
+    { key: "attendance.device.manage", label: "Manage biometric attendance devices" },
+    { key: "attendance.device.sync", label: "Run and monitor attendance synchronization" },
+    { key: "attendance.device.events.view", label: "View raw biometric punch events" },
+    { key: "attendance.mapping.manage", label: "Map device user numbers to employees" },
+  ]},
   { id: "payroll", label: "Payroll", module: "hrms", permissions: [
     { key: "payroll.view", label: "View payroll register and payslips" },
     { key: "payroll.manage", label: "Generate and manage monthly payroll" },

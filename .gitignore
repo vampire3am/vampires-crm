@@ -64,3 +64,7 @@ data/*.json
 /.codex-payroll-deploy/
 /.aecs-server-task.cmd
 /logs/
+
+# Hikvision bridge secrets and runtime logs
+/bridge/hikvision-attendance/bridge.config.json
+/bridge/hikvision-attendance/*.log

@@ -1,0 +1,13 @@
+{
+  "deviceIp": "192.168.100.80",
+  "deviceHttpPort": 80,
+  "deviceSerial": "GR6140877",
+  "deviceUsername": "admin",
+  "devicePassword": "ENTER_ON_SERVER",
+  "supabaseUrl": "https://igzrcgicslcgbowzrtzz.supabase.co",
+  "supabaseServiceRoleKey": "ENTER_ON_SERVER",
+  "pollSeconds": 30,
+  "overlapMinutes": 10,
+  "initialLookbackDays": 7,
+  "logPath": "C:\\ProgramData\\AECS\\HikvisionAttendanceBridge\\bridge.log"
+}
