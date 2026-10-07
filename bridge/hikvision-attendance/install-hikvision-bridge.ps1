@@ -30,7 +30,8 @@ $config = [ordered]@{
   logPath = "$installRoot\bridge.log"
 }
 $configPath = Join-Path $installRoot "bridge.config.json"
-$config | ConvertTo-Json | Set-Content -LiteralPath $configPath -Encoding UTF8
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json), $utf8NoBom)
 & icacls $installRoot /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" | Out-Null
 
 $stdout = Join-Path $installRoot "bridge.log"

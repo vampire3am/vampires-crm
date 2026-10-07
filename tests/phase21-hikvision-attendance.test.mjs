@@ -31,7 +31,9 @@ assert.match(permissions, /attendance\.mapping\.manage/);
 
 assert.match(bridge, /overlapMinutes/);
 assert.match(bridge, /initialLookbackDays/);
+assert.match(bridge, /replace\(\/\^\\uFEFF\//);
 assert.match(installer, /-RestartCount 999/);
+assert.match(installer, /UTF8Encoding\(\$false\)/);
 assert.match(installer, /icacls/);
 
 const normalized = normalizeHikvisionEvent({

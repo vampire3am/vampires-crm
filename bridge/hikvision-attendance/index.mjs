@@ -6,7 +6,8 @@ import { SupabaseAttendanceSink } from "./supabase-sink.mjs";
 
 const BRIDGE_VERSION = "1.0.0";
 const configPath = resolve(process.argv.find(argument => argument.endsWith(".json")) ?? process.env.AECS_HIKVISION_CONFIG ?? "bridge.config.json");
-const config = JSON.parse(await readFile(configPath, "utf8"));
+const configText = (await readFile(configPath, "utf8")).replace(/^\uFEFF/, "");
+const config = JSON.parse(configText);
 for (const field of ["deviceIp","deviceSerial","deviceUsername","devicePassword","supabaseUrl","supabaseServiceRoleKey"]) {
   if (!config[field]) throw new Error(`Missing required bridge configuration: ${field}`);
 }
