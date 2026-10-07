@@ -14,7 +14,7 @@ if (-not (Test-NetConnection 192.168.100.80 -Port 80 -InformationLevel Quiet)) {
 $deviceUser = Read-Host "Hikvision administrator username [admin]"
 if ([string]::IsNullOrWhiteSpace($deviceUser)) { $deviceUser = "admin" }
 $deviceSecurePassword = Read-Host "Hikvision administrator password" -AsSecureString
-$serviceSecureKey = Read-Host "Supabase service-role key" -AsSecureString
+$serviceSecureKey = Read-Host "Supabase secret key (sb_secret_...) or legacy service-role key" -AsSecureString
 $toPlain = { param($secret) $pointer=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)} }
 $devicePassword = & $toPlain $deviceSecurePassword
 $serviceRoleKey = & $toPlain $serviceSecureKey

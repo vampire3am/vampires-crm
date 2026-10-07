@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { after, before, test } from "node:test";
 import { HikvisionClient } from "../bridge/hikvision-attendance/hikvision-client.mjs";
+import { supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-sink.mjs";
 
 let server;
 let port;
@@ -46,4 +47,14 @@ test("Hikvision client negotiates Digest auth and reads ordered punch events", a
   assert.deepEqual(events.map(event => event.eventUid), ["201", "202"]);
   assert.equal(events[0].deviceUserId, "2");
   assert.ok(authenticatedRequests >= 2);
+});
+
+test("Supabase secret keys are never sent as JWT bearer tokens", () => {
+  const secretHeaders = supabaseServiceHeaders("sb_secret_test-only");
+  assert.equal(secretHeaders.get("apikey"), "sb_secret_test-only");
+  assert.equal(secretHeaders.get("authorization"), null);
+
+  const legacyHeaders = supabaseServiceHeaders("eyJlegacy-service-role-test");
+  assert.equal(legacyHeaders.get("apikey"), "eyJlegacy-service-role-test");
+  assert.equal(legacyHeaders.get("authorization"), "Bearer eyJlegacy-service-role-test");
 });

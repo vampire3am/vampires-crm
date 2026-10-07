@@ -8,7 +8,7 @@ The terminal may keep its configured EHome 4.0 connection enabled. This bridge d
 
 1. Apply `supabase/migrations/202610040001_hikvision_attendance_bridge.sql` in Supabase.
 2. Confirm `192.168.100.84` can reach `192.168.100.80:80`.
-3. Have the terminal administrator credentials and Supabase service-role key ready.
+3. Have the terminal administrator credentials and a Supabase secret key (`sb_secret_...`) ready. A legacy service-role key also works.
 4. Assign each employee's Device User Number in HRMS.
 
 ## Install
@@ -28,4 +28,4 @@ The installer copies the bridge to `C:\ProgramData\AECS\HikvisionAttendanceBridg
 node "C:\ProgramData\AECS\HikvisionAttendanceBridge\index.mjs" "C:\ProgramData\AECS\HikvisionAttendanceBridge\bridge.config.json" --diagnose
 ```
 
-Never commit `bridge.config.json`; it contains the terminal password and Supabase service-role key.
+Never commit `bridge.config.json`; it contains the terminal password and Supabase secret key.

@@ -40,7 +40,7 @@ The terminal currently has EHome enabled with address type `IP`, server `192.168
    & ".\bridge\hikvision-attendance\install-hikvision-bridge.ps1"
    ```
 
-   Enter the terminal administrator password and the Supabase **service_role** key when prompted. The key belongs only in the server bridge. Never put it in a browser `.env` file or commit it to Git.
+   Enter the terminal administrator password and a Supabase **secret** key (`sb_secret_...`) when prompted. The older `service_role` key is also accepted. The key belongs only in the server bridge. Never put it in a browser `.env` file, chat message, screenshot or Git commit.
 
 6. Thumb once and refresh **HRMS → Attendance**. The device panel should become green and show the punch. Thumb again later; that punch becomes check-out.
 

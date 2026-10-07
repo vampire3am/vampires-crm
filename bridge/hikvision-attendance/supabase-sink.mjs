@@ -1,3 +1,12 @@
+export function supabaseServiceHeaders(key, initialHeaders) {
+  const headers = new Headers(initialHeaders);
+  headers.set("apikey", key);
+  // New sb_secret keys are opaque API keys, not JWTs. Legacy service_role
+  // keys remain JWTs and still require the Authorization header.
+  if (!key.startsWith("sb_secret_")) headers.set("Authorization", `Bearer ${key}`);
+  return headers;
+}
+
 export class SupabaseAttendanceSink {
   constructor(config) {
     this.baseUrl = config.supabaseUrl.replace(/\/$/, "");
@@ -6,9 +15,7 @@ export class SupabaseAttendanceSink {
   }
 
   async request(path, options = {}) {
-    const headers = new Headers(options.headers);
-    headers.set("apikey", this.serviceRoleKey);
-    headers.set("Authorization", `Bearer ${this.serviceRoleKey}`);
+    const headers = supabaseServiceHeaders(this.serviceRoleKey, options.headers);
     if (options.body) headers.set("Content-Type", "application/json");
     const response = await fetch(`${this.baseUrl}/rest/v1/${path}`, { ...options, headers });
     if (!response.ok) throw new Error(`Supabase request failed with HTTP ${response.status}: ${(await response.text()).slice(0, 700)}`);
