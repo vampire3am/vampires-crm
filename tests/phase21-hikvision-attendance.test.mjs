@@ -32,6 +32,8 @@ assert.match(permissions, /attendance\.mapping\.manage/);
 assert.match(bridge, /overlapMinutes/);
 assert.match(bridge, /initialLookbackDays/);
 assert.match(bridge, /replace\(\/\^\\uFEFF\//);
+assert.match(bridge, /Terminal connection succeeded/);
+assert.match(read("bridge/hikvision-attendance/hikvision-client.mjs"), /administrator username or password \(HTTP 401\)/);
 assert.match(installer, /-RestartCount 999/);
 assert.match(installer, /UTF8Encoding\(\$false\)/);
 assert.match(installer, /icacls/);

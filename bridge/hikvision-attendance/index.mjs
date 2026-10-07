@@ -60,9 +60,14 @@ async function syncOnce() {
 }
 
 if (process.argv.includes("--diagnose")) {
-  const info = await client.deviceInfo();
-  log("info", "Terminal connection succeeded.", info);
-  await syncOnce();
+  try {
+    const info = await client.deviceInfo();
+    log("info", "Terminal connection succeeded.", info);
+    await syncOnce();
+  } catch (error) {
+    log("error", error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 } else if (process.argv.includes("--once")) {
   await syncOnce();
 } else {

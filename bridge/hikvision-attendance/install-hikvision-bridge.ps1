@@ -39,10 +39,10 @@ $action = New-ScheduledTaskAction -Execute $node -Argument "`"$installRoot\index
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 
 Write-Host "Testing terminal and database connectivity..." -ForegroundColor Cyan
 & $node "$installRoot\index.mjs" $configPath --diagnose 2>&1 | Tee-Object -FilePath $stdout
 if ($LASTEXITCODE -ne 0) { throw "Diagnostics failed. Review $stdout before starting the background task." }
+Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
 Write-Host "Bridge installed and started. Log: $stdout" -ForegroundColor Green

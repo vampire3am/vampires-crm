@@ -84,7 +84,11 @@ export class HikvisionClient {
 
   async deviceInfo() {
     const response = await digestRequest(this.auth, "/ISAPI/System/deviceInfo?format=json", { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error(`Device information request failed with HTTP ${response.status}.`);
+    if (!response.ok) {
+      if (response.status === 401) throw new Error("The terminal rejected its administrator username or password (HTTP 401). Confirm the device web-admin credentials and retry.");
+      if (response.status === 403) throw new Error("The terminal accepted the login but denied ISAPI device information (HTTP 403). Enable ISAPI/Open Network Video Interface access for the administrator.");
+      throw new Error(`Device information request failed with HTTP ${response.status}.`);
+    }
     const text = await response.text();
     try { return JSON.parse(text); } catch { return { raw: text }; }
   }
