@@ -34,6 +34,8 @@ assert.match(bridge, /initialLookbackDays/);
 assert.match(bridge, /replace\(\/\^\\uFEFF\//);
 assert.match(bridge, /Terminal connection succeeded/);
 assert.match(read("bridge/hikvision-attendance/hikvision-client.mjs"), /administrator username or password \(HTTP 401\)/);
+assert.match(read("src/services/hrmsService.ts"), /throwRpcError\(error,"Employee record could not be saved"\)/);
+assert.match(read("src/features/hrms/HrmsWorkspace.tsx"), /Device user number already assigned/);
 assert.match(installer, /-RestartCount 999/);
 assert.match(installer, /UTF8Encoding\(\$false\)/);
 assert.match(installer, /icacls/);

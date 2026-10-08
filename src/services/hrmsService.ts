@@ -5,6 +5,11 @@ import { adToBs, formatBsDate, formatBsPeriod } from "../lib/nepaliDate";
 const dateLabel=(value:string)=>formatBsDate(value);
 const nepalTime=(value:string|null)=>value?new Date(value).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Kathmandu"}):null;
 const workedHours=(clockIn:string|null,clockOut:string|null)=>{if(!clockIn)return"—";const end=clockOut?new Date(clockOut):new Date();const minutes=Math.max(0,Math.floor((end.getTime()-new Date(clockIn).getTime())/60000));return`${Math.floor(minutes/60)}h ${minutes%60}m${clockOut?"":" active"}`};
+const throwRpcError=(error:{message?:string;details?:string;hint?:string}|null,fallback:string)=>{
+ if(!error)return;
+ const message=[error.message,error.details,error.hint].filter((value,index,items):value is string=>Boolean(value)&&items.indexOf(value)===index).join(" ");
+ throw new Error(message||fallback);
+};
 type MyLeaveRpcRow={id:string;employee_code?:string|null;full_name?:string|null;leave_type:string;from_date:string;to_date:string;days:number|string;reason:string;status:string;approved_by_name?:string|null};
 type LeaveBalanceRpcRow={employee_id:string;employee_code:string;full_name:string;leave_type:string;monthly_credit:number|string;period_start:string;opening_balance?:number|string|null;credited?:number|string|null;adjusted?:number|string|null;used?:number|string|null;closing_balance?:number|string|null;is_paid:boolean;allow_half_day:boolean;year_end_action:"RESET"|"CARRY_FORWARD";max_year_end_carry?:number|string|null};
 const DEFAULT_LEAVE_POLICIES=[
@@ -34,8 +39,8 @@ export const HrmsService={
  async getLeavePolicies(){const{data,error}=await supabase.from("hr_leave_policies").select("*").eq("is_active",true).order("leave_type");if(error){if(error.code==="42P01"||error.message?.includes("hr_leave_policies"))return DEFAULT_LEAVE_POLICIES;throw error}return(data??[]).map(p=>({leaveType:p.leave_type,monthlyCredit:Number(p.monthly_credit),isPaid:p.is_paid,allowHalfDay:p.allow_half_day,monthlyCarryForward:p.monthly_carry_forward,yearEndAction:p.year_end_action as "RESET"|"CARRY_FORWARD",maxYearEndCarry:p.max_year_end_carry==null?null:Number(p.max_year_end_carry),medicalDocumentAfterDays:p.medical_document_after_days==null?null:Number(p.medical_document_after_days)}))},
  async getLeaveBalances(){const{data,error}=await supabase.rpc("hr_leave_balance_summary");if(error){if(error.code==="42883"||error.message?.includes("hr_leave_balance_summary"))return[];throw error}return(data??[]).map((b:LeaveBalanceRpcRow)=>({employeeId:b.employee_id,empCode:b.employee_code,fullName:b.full_name,leaveType:b.leave_type,monthlyCredit:Number(b.monthly_credit),periodStart:b.period_start,opening:Number(b.opening_balance??0),credited:Number(b.credited??0),adjusted:Number(b.adjusted??0),used:Number(b.used??0),closing:Number(b.closing_balance??0),isPaid:b.is_paid,allowHalfDay:b.allow_half_day,yearEndAction:b.year_end_action as "RESET"|"CARRY_FORWARD",maxYearEndCarry:b.max_year_end_carry==null?null:Number(b.max_year_end_carry)}))},
  async saveLeavePolicy(policy:Record<string,unknown>){const{error}=await supabase.rpc("hr_save_leave_policy",{policy_payload:policy});if(error)throw error},
- async createEmployee(payload:Record<string,unknown>){const{error}=await supabase.rpc("hr_create_employee",{payload});if(error)throw error},
- async updateEmployee(id:string,payload:Record<string,unknown>){const{error}=await supabase.rpc("hr_update_employee",{employee_uuid:id,payload});if(error)throw error},
+ async createEmployee(payload:Record<string,unknown>){const{error}=await supabase.rpc("hr_create_employee",{payload});throwRpcError(error,"Employee could not be created")},
+ async updateEmployee(id:string,payload:Record<string,unknown>){const{error}=await supabase.rpc("hr_update_employee",{employee_uuid:id,payload});throwRpcError(error,"Employee record could not be saved")},
  async changeEmploymentStatus(id:string,status:string,reason?:string){const{error}=await supabase.rpc("hr_change_employment_status",{employee_uuid:id,new_status:status,reason:reason??null});if(error)throw error},
  async getShifts(){const{data,error}=await supabase.from("hr_shifts").select("*").order("name");if(error)throw error;return data??[]},
  async getShiftAssignments(){const{data,error}=await supabase.from("hr_shift_assignments").select("*,hr_shifts(name,start_time,end_time),hr_employees(employee_code,full_name)").order("effective_from",{ascending:false});if(error)throw error;return data??[]},
