@@ -11,9 +11,10 @@ if (-not (Test-NetConnection 192.168.100.80 -Port 80 -InformationLevel Quiet)) {
   throw "The Hikvision terminal is not reachable at 192.168.100.80:80. Check its cable, IP and network first."
 }
 
-$deviceUser = Read-Host "Hikvision administrator username [admin]"
-if ([string]::IsNullOrWhiteSpace($deviceUser)) { $deviceUser = "admin" }
-$deviceSecurePassword = Read-Host "Hikvision administrator password" -AsSecureString
+$deviceCredential = Get-Credential -UserName "admin" -Message "Enter the Hikvision network administrator password that passed the HTTP 200 test"
+if (-not $deviceCredential) { throw "Hikvision credentials are required." }
+$deviceUser = $deviceCredential.UserName
+$deviceSecurePassword = $deviceCredential.Password
 $serviceSecureKey = Read-Host "Supabase secret key (sb_secret_...) or legacy service-role key - NOT the project URL" -AsSecureString
 $toPlain = { param($secret) $pointer=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)} }
 $devicePassword = & $toPlain $deviceSecurePassword
