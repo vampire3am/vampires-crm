@@ -14,11 +14,17 @@ if (-not (Test-NetConnection 192.168.100.80 -Port 80 -InformationLevel Quiet)) {
 $deviceUser = Read-Host "Hikvision administrator username [admin]"
 if ([string]::IsNullOrWhiteSpace($deviceUser)) { $deviceUser = "admin" }
 $deviceSecurePassword = Read-Host "Hikvision administrator password" -AsSecureString
-$serviceSecureKey = Read-Host "Supabase secret key (sb_secret_...) or legacy service-role key" -AsSecureString
+$serviceSecureKey = Read-Host "Supabase secret key (sb_secret_...) or legacy service-role key - NOT the project URL" -AsSecureString
 $toPlain = { param($secret) $pointer=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)} }
 $devicePassword = & $toPlain $deviceSecurePassword
 $serviceRoleKey = & $toPlain $serviceSecureKey
 if ([string]::IsNullOrWhiteSpace($devicePassword) -or [string]::IsNullOrWhiteSpace($serviceRoleKey)) { throw "Both secrets are required." }
+if ($serviceRoleKey -match '^https?://') {
+  throw "A Supabase project URL was entered where the secret key is required. Copy an sb_secret_... key (or the legacy service_role JWT) from Supabase Project Settings > API Keys."
+}
+if ($serviceRoleKey -notmatch '^(sb_secret_|eyJ)') {
+  throw "The Supabase credential is not a recognized secret key. It must begin with sb_secret_ or eyJ (legacy service_role JWT)."
+}
 
 New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 Copy-Item "$PSScriptRoot\*.mjs" $installRoot -Force

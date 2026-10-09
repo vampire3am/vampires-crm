@@ -39,6 +39,8 @@ assert.match(read("src/features/hrms/HrmsWorkspace.tsx"), /Device user number al
 assert.match(installer, /-RestartCount 999/);
 assert.match(installer, /UTF8Encoding\(\$false\)/);
 assert.match(installer, /icacls/);
+assert.match(installer, /project URL was entered where the secret key is required/);
+assert.match(installer, /\^\(sb_secret_\|eyJ\)/);
 
 const normalized = normalizeHikvisionEvent({
   employeeNoString: "4",
