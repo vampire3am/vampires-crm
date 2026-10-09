@@ -78,6 +78,27 @@ async function windowsCredentialRequest(configPath, path, options = {}) {
   return new Response(responseBody, { status: Number(envelope.status), headers: envelope.headers ?? {} });
 }
 
+async function curlDigestRequest({ baseUrl, username, password }, path, options = {}) {
+  const method = (options.method ?? "GET").toUpperCase();
+  const url = new URL(path, baseUrl).toString();
+  const marker = "\n__AECS_HTTP_STATUS__:";
+  const args = [
+    "--silent", "--show-error", "--digest", "--user", `${username}:${password}`,
+    "--connect-timeout", "10", "--max-time", "30", "--request", method,
+  ];
+  for (const [name, value] of new Headers(options.headers)) args.push("--header", `${name}: ${value}`);
+  if (options.body != null) args.push("--data-binary", String(options.body));
+  args.push("--write-out", `${marker}%{http_code}`, url);
+  const { stdout } = await execFileAsync("curl.exe", args, { windowsHide: true, maxBuffer: 10 * 1024 * 1024, encoding: "buffer" });
+  const output = Buffer.from(stdout);
+  const markerBytes = Buffer.from(marker);
+  const markerPosition = output.lastIndexOf(markerBytes);
+  if (markerPosition < 0) throw new Error("curl.exe did not return the terminal HTTP status.");
+  const status = Number(output.subarray(markerPosition + markerBytes.length).toString("ascii").trim());
+  if (!Number.isInteger(status) || status < 100) throw new Error(`Terminal request failed before an HTTP response was received (curl status ${status || 0}).`);
+  return new Response(output.subarray(0, markerPosition), { status });
+}
+
 function localizeDeviceTimestamp(value) {
   if (!value) return null;
   const normalized = String(value).trim();
@@ -178,7 +199,13 @@ export class HikvisionClient {
 
 
   async request(path, options = {}) {
-    if (process.platform === "win32" && this.configPath) return windowsCredentialRequest(this.configPath, path, options);
+    if (process.platform === "win32" && this.configPath) {
+      try { return await curlDigestRequest(this.auth, path, options); }
+      catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+        return windowsCredentialRequest(this.configPath, path, options);
+      }
+    }
     return digestRequest(this.auth, path, options);
   }
 
