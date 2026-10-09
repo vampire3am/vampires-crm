@@ -8,6 +8,7 @@ import { supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-
 let server;
 let port;
 let authenticatedRequests = 0;
+let xmlEventQueries = 0;
 
 before(async () => {
   server = http.createServer((request, response) => {
@@ -34,6 +35,7 @@ before(async () => {
       return;
     }
     response.setHeader("Content-Type", "application/xml");
+    xmlEventQueries += 1;
     response.end('<?xml version="1.0" encoding="UTF-8"?><AcsEvent><searchID>runtime</searchID><numOfMatches>2</numOfMatches><totalMatches>2</totalMatches><InfoList><employeeNoString>2</employeeNoString><time>2026-10-04T17:30:00</time><serialNo>202</serialNo><currentVerifyMode>fingerPrint</currentVerifyMode></InfoList><InfoList><employeeNoString>2</employeeNoString><time>2026-10-04T08:30:00</time><serialNo>201</serialNo><currentVerifyMode>fingerPrint</currentVerifyMode></InfoList></AcsEvent>');
   });
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -52,9 +54,10 @@ test("Hikvision client negotiates Digest auth and falls back to XML punch events
   });
   const info = await client.deviceInfo();
   assert.equal(info.DeviceInfo.model, "DS-K1A8503EF-B");
-  const events = await client.searchEvents(new Date("2026-10-04T00:00:00Z"), new Date("2026-10-05T00:00:00Z"));
+  const events = await client.searchEvents(new Date("2026-10-04T00:00:00Z"), new Date("2026-10-06T00:00:00Z"));
   assert.deepEqual(events.map(event => event.eventUid), ["201", "202"]);
   assert.equal(events[0].deviceUserId, "2");
+  assert.equal(xmlEventQueries, 2);
   assert.ok(authenticatedRequests >= 2);
 });
 

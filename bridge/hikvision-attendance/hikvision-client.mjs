@@ -198,53 +198,54 @@ export class HikvisionClient {
     // The DS-K1A8503EF-B firmware accepts at most 30 records and may only
     // implement the XML form of this endpoint even when ?format=json exists.
     const maxResults = 30;
-    const searchID = randomBytes(12).toString("hex");
-    const start = terminalTimestamp(startTime);
-    const end = terminalTimestamp(endTime);
     let format = "json";
-    for (let position = 0; position < 100000; position += maxResults) {
-      const condition = {
-        searchID,
-        searchResultPosition: position,
-        maxResults,
-        major: 0,
-        minor: 0,
-        startTime: start,
-        endTime: end,
-      };
-      const jsonBody = JSON.stringify({
-        AcsEventCond: {
-          ...condition,
-        },
-      });
-      const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><AcsEventCond version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">${Object.entries(condition).map(([key, value]) => `<${key}>${xmlEscape(value)}</${key}>`).join("")}</AcsEventCond>`;
-      let parsed;
-      if (format === "json") {
-        parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent?format=json", {
-          method: "POST",
-          headers: { Accept: "application/json", "Content-Type": "application/json" },
-          body: jsonBody,
-        }));
-        if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "xml";
+    // Older 1A8503 firmware rejects large date ranges with HTTP 400. Query
+    // one day at a time and deduplicate records on the inclusive boundaries.
+    const first = new Date(startTime).getTime();
+    const last = new Date(endTime).getTime();
+    for (let windowStart = first; windowStart < last; windowStart += 86_400_000) {
+      const windowEnd = Math.min(last, windowStart + 86_400_000 - 1);
+      const searchID = randomBytes(12).toString("hex");
+      for (let position = 0; position < 100000; position += maxResults) {
+        const condition = {
+          searchID,
+          searchResultPosition: position,
+          maxResults,
+          major: 0,
+          minor: 0,
+          startTime: terminalTimestamp(windowStart),
+          endTime: terminalTimestamp(windowEnd),
+        };
+        const jsonBody = JSON.stringify({ AcsEventCond: condition });
+        const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><AcsEventCond version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">${Object.entries(condition).map(([key, value]) => `<${key}>${xmlEscape(value)}</${key}>`).join("")}</AcsEventCond>`;
+        let parsed;
+        if (format === "json") {
+          parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent?format=json", {
+            method: "POST",
+            headers: { Accept: "application/json", "Content-Type": "application/json" },
+            body: jsonBody,
+          }));
+          if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "xml";
+        }
+        if (format === "xml") {
+          parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent", {
+            method: "POST",
+            headers: { Accept: "application/xml", "Content-Type": "application/xml; charset=UTF-8" },
+            body: xmlBody,
+          }));
+        }
+        if (!parsed?.ok) throw new Error(`Attendance event query failed with HTTP ${parsed?.status ?? "unknown"}: ${parsed?.detail ?? "no response body"}`);
+        const payload = parsed.payload;
+        const batch = eventList(payload);
+        for (const raw of batch) {
+          const event = normalizeHikvisionEvent(raw, this.deviceSerial);
+          if (event) results.push(event);
+        }
+        const reported = Number(payload?.AcsEvent?.numOfMatches ?? batch.length);
+        const total = Number(payload?.AcsEvent?.totalMatches ?? position + reported);
+        if (reported < maxResults || position + reported >= total) break;
       }
-      if (format === "xml") {
-        parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent", {
-          method: "POST",
-          headers: { Accept: "application/xml", "Content-Type": "application/xml; charset=UTF-8" },
-          body: xmlBody,
-        }));
-      }
-      if (!parsed?.ok) throw new Error(`Attendance event query failed with HTTP ${parsed?.status ?? "unknown"}: ${parsed?.detail ?? "no response body"}`);
-      const payload = parsed.payload;
-      const batch = eventList(payload);
-      for (const raw of batch) {
-        const event = normalizeHikvisionEvent(raw, this.deviceSerial);
-        if (event) results.push(event);
-      }
-      const reported = Number(payload?.AcsEvent?.numOfMatches ?? batch.length);
-      const total = Number(payload?.AcsEvent?.totalMatches ?? position + reported);
-      if (reported < maxResults || position + reported >= total) break;
     }
-    return results.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
+    return [...new Map(results.map(event => [event.eventUid, event])).values()].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
   }
 }
