@@ -11,7 +11,7 @@ import { supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-
 let server;
 let port;
 let authenticatedRequests = 0;
-let xmlEventQueries = 0;
+let legacyTextQueries = 0;
 
 before(async () => {
   server = http.createServer((request, response) => {
@@ -33,14 +33,27 @@ before(async () => {
       response.end(JSON.stringify({ DeviceInfo: { model: "DS-K1A8503EF-B", serialNumber: "GR6140877" } }));
       return;
     }
-    if (request.url.includes("format=json")) {
+    if (request.url.includes("format=json") && request.headers["content-type"]?.startsWith("application/json")) {
       response.writeHead(400, { "Content-Type": "application/xml" });
       response.end('<ResponseStatus><statusCode>4</statusCode><subStatusCode>badJsonFormat</subStatusCode></ResponseStatus>');
       return;
     }
-    response.setHeader("Content-Type", "application/xml");
-    xmlEventQueries += 1;
-    response.end('<?xml version="1.0" encoding="UTF-8"?><AcsEvent><searchID>runtime</searchID><numOfMatches>2</numOfMatches><totalMatches>2</totalMatches><InfoList><employeeNoString>2</employeeNoString><time>2026-10-04T17:30:00</time><serialNo>202</serialNo><currentVerifyMode>fingerPrint</currentVerifyMode></InfoList><InfoList><employeeNoString>2</employeeNoString><time>2026-10-04T08:30:00</time><serialNo>201</serialNo><currentVerifyMode>fingerPrint</currentVerifyMode></InfoList></AcsEvent>');
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      const condition = JSON.parse(body).AcsEventCond;
+      assert.equal(condition.maxResults, 24);
+      assert.equal(condition.major, 5);
+      assert.equal(condition.timeReverseOrder, true);
+      assert.equal(condition.eventAttribute, "attendance");
+      response.setHeader("Content-Type", "application/json");
+      legacyTextQueries += 1;
+      response.end(JSON.stringify({ AcsEvent: { numOfMatches: 2, totalMatches: 2, InfoList: [
+        { employeeNoString: "2", time: "2026-10-04T17:30:00", serialNo: 202, currentVerifyMode: "fingerPrint" },
+        { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201, currentVerifyMode: "fingerPrint" },
+      ] } }));
+    });
   });
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   port = server.address().port;
@@ -48,7 +61,7 @@ before(async () => {
 
 after(async () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
 
-test("Hikvision client negotiates Digest auth and falls back to XML punch events", async () => {
+test("Hikvision client negotiates Digest auth and falls back to legacy text JSON", async () => {
   const client = new HikvisionClient({
     deviceIp: "127.0.0.1",
     deviceHttpPort: port,
@@ -61,7 +74,7 @@ test("Hikvision client negotiates Digest auth and falls back to XML punch events
   const events = await client.searchEvents(new Date("2026-10-04T00:00:00Z"), new Date("2026-10-06T00:00:00Z"));
   assert.deepEqual(events.map(event => event.eventUid), ["201", "202"]);
   assert.equal(events[0].deviceUserId, "2");
-  assert.equal(xmlEventQueries, 2);
+  assert.equal(legacyTextQueries, 2);
   assert.ok(authenticatedRequests >= 2);
 });
 
@@ -88,7 +101,7 @@ test("Windows native Digest transport preserves attendance POST bodies", { skip:
     request.setEncoding("utf8");
     request.on("data", chunk => { body += chunk; });
     request.on("end", () => {
-      assert.equal(JSON.parse(body).AcsEventCond.maxResults, 30);
+      assert.equal(JSON.parse(body).AcsEventCond.maxResults, 24);
       response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify({ AcsEvent: { numOfMatches: 1, totalMatches: 1, InfoList: [
         { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201 },

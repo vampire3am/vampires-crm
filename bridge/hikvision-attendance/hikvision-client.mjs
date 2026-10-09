@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -197,7 +197,7 @@ export class HikvisionClient {
     const results = [];
     // The DS-K1A8503EF-B firmware accepts at most 30 records and may only
     // implement the XML form of this endpoint even when ?format=json exists.
-    const maxResults = 30;
+    const maxResults = 24;
     let format = "json";
     // Older 1A8503 firmware rejects large date ranges with HTTP 400. Query
     // one day at a time and deduplicate records on the inclusive boundaries.
@@ -205,7 +205,7 @@ export class HikvisionClient {
     const last = new Date(endTime).getTime();
     for (let windowStart = first; windowStart < last; windowStart += 86_400_000) {
       const windowEnd = Math.min(last, windowStart + 86_400_000 - 1);
-      const searchID = randomBytes(12).toString("hex");
+      const searchID = randomUUID();
       for (let position = 0; position < 100000; position += maxResults) {
         const condition = {
           searchID,
@@ -217,6 +217,12 @@ export class HikvisionClient {
           endTime: terminalTimestamp(windowEnd),
         };
         const jsonBody = JSON.stringify({ AcsEventCond: condition });
+        const legacyJsonBody = JSON.stringify({ AcsEventCond: {
+          ...condition,
+          major: 5,
+          timeReverseOrder: true,
+          eventAttribute: "attendance",
+        } });
         const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><AcsEventCond version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">${Object.entries(condition).map(([key, value]) => `<${key}>${xmlEscape(value)}</${key}>`).join("")}</AcsEventCond>`;
         let parsed;
         if (format === "json") {
@@ -225,10 +231,21 @@ export class HikvisionClient {
             headers: { Accept: "application/json", "Content-Type": "application/json" },
             body: jsonBody,
           }));
+          if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "text";
+        }
+        // Several 1A8503 firmware builds expose ?format=json but only parse
+        // the body when it is labelled text/plain (the format comes from the
+        // URL). Retry the identical valid JSON without changing its schema.
+        if (format === "text") {
+          parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent?format=json", {
+            method: "POST",
+            headers: { Accept: "application/json", "Content-Type": "text/plain; charset=UTF-8" },
+            body: legacyJsonBody,
+          }));
           if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "xml";
         }
         if (format === "xml") {
-          parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent", {
+          parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent?format=xml", {
             method: "POST",
             headers: { Accept: "application/xml", "Content-Type": "application/xml; charset=UTF-8" },
             body: xmlBody,
