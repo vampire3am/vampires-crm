@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -179,6 +179,12 @@ function terminalTimestamp(value) {
   return `${shifted.toISOString().slice(0, 19)}+05:45`;
 }
 
+function legacyTerminalTimestamp(value) {
+  // Early DS-K1A8503 firmware parses the timestamp as device-local time and
+  // reports badJsonFormat when a quarter-hour UTC offset is present.
+  return new Date(new Date(value).getTime() + 345 * 60_000).toISOString().slice(0, 19);
+}
+
 async function parseEventResponse(response) {
   const text = await response.text();
   if (!response.ok) return { ok: false, status: response.status, detail: text.slice(0, 500) };
@@ -224,7 +230,7 @@ export class HikvisionClient {
     const results = [];
     // The DS-K1A8503EF-B firmware accepts at most 30 records and may only
     // implement the XML form of this endpoint even when ?format=json exists.
-    const maxResults = 24;
+    const maxResults = 10;
     let format = "json";
     // Older 1A8503 firmware rejects large date ranges with HTTP 400. Query
     // one day at a time and deduplicate records on the inclusive boundaries.
@@ -232,24 +238,27 @@ export class HikvisionClient {
     const last = new Date(endTime).getTime();
     for (let windowStart = first; windowStart < last; windowStart += 86_400_000) {
       const windowEnd = Math.min(last, windowStart + 86_400_000 - 1);
-      const searchID = randomUUID();
+      // This terminal generation documents a short search token. Some newer
+      // access controllers accept UUIDs, but the 1.4.x attendance firmware can
+      // reject their hyphens as badJsonFormat.
+      const searchID = `${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-16);
       for (let position = 0; position < 100000; position += maxResults) {
         const condition = {
           searchID,
           searchResultPosition: position,
           maxResults,
-          major: 0,
+          major: 5,
           minor: 0,
+          startTime: legacyTerminalTimestamp(windowStart),
+          endTime: legacyTerminalTimestamp(windowEnd),
+        };
+        const jsonBody = JSON.stringify({ AcsEventCond: condition });
+        const offsetCondition = {
+          ...condition,
           startTime: terminalTimestamp(windowStart),
           endTime: terminalTimestamp(windowEnd),
         };
-        const jsonBody = JSON.stringify({ AcsEventCond: condition });
-        const legacyJsonBody = JSON.stringify({ AcsEventCond: {
-          ...condition,
-          major: 5,
-          timeReverseOrder: true,
-          eventAttribute: "attendance",
-        } });
+        const offsetJsonBody = JSON.stringify({ AcsEventCond: offsetCondition });
         const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><AcsEventCond version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">${Object.entries(condition).map(([key, value]) => `<${key}>${xmlEscape(value)}</${key}>`).join("")}</AcsEventCond>`;
         let parsed;
         if (format === "json") {
@@ -258,16 +267,15 @@ export class HikvisionClient {
             headers: { Accept: "application/json", "Content-Type": "application/json" },
             body: jsonBody,
           }));
-          if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "text";
+          if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "offset";
         }
-        // Several 1A8503 firmware builds expose ?format=json but only parse
-        // the body when it is labelled text/plain (the format comes from the
-        // URL). Retry the identical valid JSON without changing its schema.
-        if (format === "text") {
+        // Retry with an explicit Nepal offset for firmware that implements the
+        // newer ISAPI timestamp parser.
+        if (format === "offset") {
           parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent?format=json", {
             method: "POST",
-            headers: { Accept: "application/json", "Content-Type": "text/plain; charset=UTF-8" },
-            body: legacyJsonBody,
+            headers: { Accept: "application/json", "Content-Type": "application/json; charset=UTF-8" },
+            body: offsetJsonBody,
           }));
           if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "xml";
         }

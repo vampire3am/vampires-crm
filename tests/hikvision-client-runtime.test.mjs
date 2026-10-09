@@ -11,7 +11,7 @@ import { supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-
 let server;
 let port;
 let authenticatedRequests = 0;
-let legacyTextQueries = 0;
+let offsetQueries = 0;
 
 before(async () => {
   server = http.createServer((request, response) => {
@@ -33,22 +33,22 @@ before(async () => {
       response.end(JSON.stringify({ DeviceInfo: { model: "DS-K1A8503EF-B", serialNumber: "GR6140877" } }));
       return;
     }
-    if (request.url.includes("format=json") && request.headers["content-type"]?.startsWith("application/json")) {
-      response.writeHead(400, { "Content-Type": "application/xml" });
-      response.end('<ResponseStatus><statusCode>4</statusCode><subStatusCode>badJsonFormat</subStatusCode></ResponseStatus>');
-      return;
-    }
     let body = "";
     request.setEncoding("utf8");
     request.on("data", chunk => { body += chunk; });
     request.on("end", () => {
       const condition = JSON.parse(body).AcsEventCond;
-      assert.equal(condition.maxResults, 24);
+      assert.equal(condition.maxResults, 10);
       assert.equal(condition.major, 5);
-      assert.equal(condition.timeReverseOrder, true);
-      assert.equal(condition.eventAttribute, "attendance");
+      assert.equal(condition.minor, 0);
+      assert.match(condition.searchID, /^\d{1,16}$/);
+      if (!condition.startTime.endsWith("+05:45")) {
+        response.writeHead(400, { "Content-Type": "application/xml" });
+        response.end('<ResponseStatus><statusCode>5</statusCode><subStatusCode>badJsonFormat</subStatusCode></ResponseStatus>');
+        return;
+      }
       response.setHeader("Content-Type", "application/json");
-      legacyTextQueries += 1;
+      offsetQueries += 1;
       response.end(JSON.stringify({ AcsEvent: { numOfMatches: 2, totalMatches: 2, InfoList: [
         { employeeNoString: "2", time: "2026-10-04T17:30:00", serialNo: 202, currentVerifyMode: "fingerPrint" },
         { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201, currentVerifyMode: "fingerPrint" },
@@ -61,7 +61,7 @@ before(async () => {
 
 after(async () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
 
-test("Hikvision client negotiates Digest auth and falls back to legacy text JSON", async () => {
+test("Hikvision client negotiates Digest auth and retries with offset timestamps", async () => {
   const client = new HikvisionClient({
     deviceIp: "127.0.0.1",
     deviceHttpPort: port,
@@ -74,7 +74,7 @@ test("Hikvision client negotiates Digest auth and falls back to legacy text JSON
   const events = await client.searchEvents(new Date("2026-10-04T00:00:00Z"), new Date("2026-10-06T00:00:00Z"));
   assert.deepEqual(events.map(event => event.eventUid), ["201", "202"]);
   assert.equal(events[0].deviceUserId, "2");
-  assert.equal(legacyTextQueries, 2);
+  assert.equal(offsetQueries, 2);
   assert.ok(authenticatedRequests >= 2);
 });
 
@@ -101,7 +101,10 @@ test("Windows native Digest transport preserves attendance POST bodies", { skip:
     request.setEncoding("utf8");
     request.on("data", chunk => { body += chunk; });
     request.on("end", () => {
-      assert.equal(JSON.parse(body).AcsEventCond.maxResults, 24);
+      const condition = JSON.parse(body).AcsEventCond;
+      assert.equal(condition.maxResults, 10);
+      assert.equal(condition.major, 5);
+      assert.doesNotMatch(condition.startTime, /(?:Z|[+-]\d{2}:\d{2})$/);
       response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify({ AcsEvent: { numOfMatches: 1, totalMatches: 1, InfoList: [
         { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201 },
