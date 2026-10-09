@@ -8,6 +8,6 @@
   "supabaseServiceRoleKey": "ENTER_ON_SERVER",
   "pollSeconds": 30,
   "overlapMinutes": 10,
-  "initialLookbackDays": 7,
+  "initialLookbackDays": 1,
   "logPath": "C:\\ProgramData\\AECS\\HikvisionAttendanceBridge\\bridge.log"
 }

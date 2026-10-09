@@ -16,7 +16,7 @@ const client = new HikvisionClient({ ...config, configPath });
 const sink = new SupabaseAttendanceSink(config);
 const pollSeconds = Math.max(10, Number(config.pollSeconds ?? 30));
 const overlapMinutes = Math.max(1, Number(config.overlapMinutes ?? 10));
-const initialLookbackDays = Math.max(1, Number(config.initialLookbackDays ?? 7));
+const initialLookbackDays = Math.max(1, Number(config.initialLookbackDays ?? 1));
 let syncing = false;
 
 const log = (level, message, details) => {
