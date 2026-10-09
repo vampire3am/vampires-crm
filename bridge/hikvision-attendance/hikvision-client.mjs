@@ -111,6 +111,60 @@ function eventList(payload) {
   return [];
 }
 
+function xmlEscape(value) {
+  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
+}
+
+function xmlDecode(value) {
+  return String(value)
+    .replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'").replaceAll("&amp;", "&")
+    .replace(/&#(x[0-9a-f]+|\d+);/gi, (_, code) => String.fromCodePoint(code[0].toLowerCase() === "x" ? Number.parseInt(code.slice(1), 16) : Number.parseInt(code, 10)));
+}
+
+function xmlValue(xml, name) {
+  const match = String(xml).match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, "i"));
+  return match ? xmlDecode(match[1].trim()) : undefined;
+}
+
+function xmlEventPayload(xml) {
+  const text = String(xml).replace(/^\uFEFF/, "");
+  const status = xmlValue(text, "statusCode");
+  if (status && status !== "1" && status !== "200") {
+    const message = xmlValue(text, "subStatusCode") ?? xmlValue(text, "statusString") ?? "terminal rejected the request";
+    throw new Error(`Hikvision ISAPI error ${status}: ${message}`);
+  }
+  const blocks = [...text.matchAll(/<InfoList(?:\s[^>]*)?>([\s\S]*?)<\/InfoList>/gi)].map(match => match[1]);
+  const eventBlocks = blocks.flatMap(block => {
+    const nested = [...block.matchAll(/<(?:AcsEventInfo|eventInfo)(?:\s[^>]*)?>([\s\S]*?)<\/(?:AcsEventInfo|eventInfo)>/gi)].map(match => match[1]);
+    return nested.length ? nested : [block];
+  });
+  const fields = [
+    "employeeNoString", "employeeNo", "personNo", "cardNo", "userID", "time", "dateTime", "eventTime",
+    "serialNo", "eventID", "eventId", "sequenceNo", "major", "minor", "attendanceStatus", "attendanceState",
+    "currentVerifyMode", "verifyMode", "eventKind", "subEventType", "name", "deviceName", "doorNo",
+  ];
+  const InfoList = eventBlocks.map(block => Object.fromEntries(fields.map(field => [field, xmlValue(block, field)]).filter(([, value]) => value !== undefined)));
+  return { AcsEvent: {
+    searchID: xmlValue(text, "searchID"),
+    numOfMatches: Number(xmlValue(text, "numOfMatches") ?? InfoList.length),
+    totalMatches: Number(xmlValue(text, "totalMatches") ?? InfoList.length),
+    InfoList,
+  } };
+}
+
+function terminalTimestamp(value) {
+  const shifted = new Date(new Date(value).getTime() + 345 * 60_000);
+  return `${shifted.toISOString().slice(0, 19)}+05:45`;
+}
+
+async function parseEventResponse(response) {
+  const text = await response.text();
+  if (!response.ok) return { ok: false, status: response.status, detail: text.slice(0, 500) };
+  try { return { ok: true, payload: JSON.parse(text) }; }
+  catch { return { ok: true, payload: xmlEventPayload(text) }; }
+}
+
 export class HikvisionClient {
   constructor(config) {
     this.auth = {
@@ -141,30 +195,47 @@ export class HikvisionClient {
 
   async searchEvents(startTime, endTime) {
     const results = [];
-    const maxResults = 200;
+    // The DS-K1A8503EF-B firmware accepts at most 30 records and may only
+    // implement the XML form of this endpoint even when ?format=json exists.
+    const maxResults = 30;
     const searchID = randomBytes(12).toString("hex");
+    const start = terminalTimestamp(startTime);
+    const end = terminalTimestamp(endTime);
+    let format = "json";
     for (let position = 0; position < 100000; position += maxResults) {
-      const body = JSON.stringify({
+      const condition = {
+        searchID,
+        searchResultPosition: position,
+        maxResults,
+        major: 0,
+        minor: 0,
+        startTime: start,
+        endTime: end,
+      };
+      const jsonBody = JSON.stringify({
         AcsEventCond: {
-          searchID,
-          searchResultPosition: position,
-          maxResults,
-          major: 0,
-          minor: 0,
-          startTime: new Date(startTime).toISOString(),
-          endTime: new Date(endTime).toISOString(),
+          ...condition,
         },
       });
-      const response = await this.request("/ISAPI/AccessControl/AcsEvent?format=json", {
-        method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body,
-      });
-      if (!response.ok) {
-        const detail = (await response.text()).slice(0, 500);
-        throw new Error(`Attendance event query failed with HTTP ${response.status}: ${detail}`);
+      const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><AcsEventCond version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">${Object.entries(condition).map(([key, value]) => `<${key}>${xmlEscape(value)}</${key}>`).join("")}</AcsEventCond>`;
+      let parsed;
+      if (format === "json") {
+        parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent?format=json", {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: jsonBody,
+        }));
+        if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "xml";
       }
-      const payload = await response.json();
+      if (format === "xml") {
+        parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent", {
+          method: "POST",
+          headers: { Accept: "application/xml", "Content-Type": "application/xml; charset=UTF-8" },
+          body: xmlBody,
+        }));
+      }
+      if (!parsed?.ok) throw new Error(`Attendance event query failed with HTTP ${parsed?.status ?? "unknown"}: ${parsed?.detail ?? "no response body"}`);
+      const payload = parsed.payload;
       const batch = eventList(payload);
       for (const raw of batch) {
         const event = normalizeHikvisionEvent(raw, this.deviceSerial);

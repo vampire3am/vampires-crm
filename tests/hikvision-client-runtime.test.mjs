@@ -23,15 +23,18 @@ before(async () => {
     const ha2=hash(`${request.method}:${fields.uri}`);
     assert.equal(fields.response,hash(`${ha1}:runtime-test:${fields.nc}:${fields.cnonce}:auth:${ha2}`));
     authenticatedRequests += 1;
-    response.setHeader("Content-Type", "application/json");
     if (request.url.startsWith("/ISAPI/System/deviceInfo")) {
+      response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify({ DeviceInfo: { model: "DS-K1A8503EF-B", serialNumber: "GR6140877" } }));
       return;
     }
-    response.end(JSON.stringify({ AcsEvent: { numOfMatches: 2, totalMatches: 2, InfoList: [
-      { employeeNoString: "2", time: "2026-10-04T17:30:00", serialNo: 202 },
-      { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201 },
-    ] } }));
+    if (request.url.includes("format=json")) {
+      response.writeHead(400, { "Content-Type": "application/xml" });
+      response.end('<ResponseStatus><statusCode>4</statusCode><subStatusCode>badJsonFormat</subStatusCode></ResponseStatus>');
+      return;
+    }
+    response.setHeader("Content-Type", "application/xml");
+    response.end('<?xml version="1.0" encoding="UTF-8"?><AcsEvent><searchID>runtime</searchID><numOfMatches>2</numOfMatches><totalMatches>2</totalMatches><InfoList><employeeNoString>2</employeeNoString><time>2026-10-04T17:30:00</time><serialNo>202</serialNo><currentVerifyMode>fingerPrint</currentVerifyMode></InfoList><InfoList><employeeNoString>2</employeeNoString><time>2026-10-04T08:30:00</time><serialNo>201</serialNo><currentVerifyMode>fingerPrint</currentVerifyMode></InfoList></AcsEvent>');
   });
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   port = server.address().port;
@@ -39,7 +42,7 @@ before(async () => {
 
 after(async () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
 
-test("Hikvision client negotiates Digest auth and reads ordered punch events", async () => {
+test("Hikvision client negotiates Digest auth and falls back to XML punch events", async () => {
   const client = new HikvisionClient({
     deviceIp: "127.0.0.1",
     deviceHttpPort: port,
