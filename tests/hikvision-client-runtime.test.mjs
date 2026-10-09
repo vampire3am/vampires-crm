@@ -21,6 +21,7 @@ before(async () => {
       return;
     }
     assert.match(request.headers.authorization, /^Digest /);
+    assert.equal(request.headers.expect, undefined);
     const fields=Object.fromEntries([...request.headers.authorization.slice(7).matchAll(/([a-zA-Z0-9_-]+)=(?:"([^"]*)"|([^,\s]+))/g)].map(match=>[match[1],match[2]??match[3]]));
     const hash=value=>createHash("sha256").update(value).digest("hex");
     const ha1=hash(`admin:AECS:test-only`);
@@ -82,6 +83,7 @@ test("Windows native Digest transport preserves attendance POST bodies", { skip:
       return;
     }
     assert.match(request.headers.authorization, /^Digest /);
+    assert.equal(request.headers.expect, undefined);
     let body = "";
     request.setEncoding("utf8");
     request.on("data", chunk => { body += chunk; });

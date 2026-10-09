@@ -20,6 +20,10 @@ try {
   $client = New-Object System.Net.Http.HttpClient($handler)
   $client.Timeout = [TimeSpan]::FromSeconds(30)
   $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::new($Method), $uri)
+  # Older Hikvision embedded web servers answer before reading a body when
+  # .NET sends "Expect: 100-continue", producing badJsonFormat for valid JSON.
+  $request.Headers.ExpectContinue = $false
+  $request.Headers.ConnectionClose = $true
   if ($BodyBase64) {
     $bodyBytes = [Convert]::FromBase64String($BodyBase64)
     $request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList @(,$bodyBytes)
