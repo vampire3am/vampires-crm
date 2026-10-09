@@ -1,6 +1,14 @@
 import { createHash, randomBytes } from "node:crypto";
 
-const md5 = value => createHash("md5").update(value).digest("hex");
+const digestHash = (algorithm, value) => {
+  const normalized = String(algorithm || "MD5").toUpperCase();
+  const hashName = normalized.startsWith("SHA-256") ? "sha256"
+    : normalized.startsWith("SHA-512-256") ? "sha512-256"
+      : normalized.startsWith("MD5") ? "md5" : null;
+  if (!hashName) throw new Error(`Unsupported terminal Digest algorithm: ${algorithm}`);
+  return createHash(hashName).update(value).digest("hex");
+};
+const md5 = value => digestHash("MD5", value);
 
 function parseDigestChallenge(header) {
   if (!header?.startsWith("Digest ")) throw new Error("The terminal did not offer Digest authentication. Check the device HTTP authentication settings.");
@@ -23,14 +31,18 @@ export async function digestRequest({ baseUrl, username, password }, path, optio
   const qop = challenge.qop?.split(",").map(value => value.trim()).find(value => value === "auth");
   const nc = "00000001";
   const cnonce = randomBytes(12).toString("hex");
-  const ha1 = md5(`${username}:${challenge.realm}:${password}`);
-  const ha2 = md5(`${method}:${uri}`);
+  const algorithm = challenge.algorithm || "MD5";
+  const initialHa1 = digestHash(algorithm, `${username}:${challenge.realm}:${password}`);
+  const ha1 = algorithm.toUpperCase().endsWith("-SESS")
+    ? digestHash(algorithm, `${initialHa1}:${challenge.nonce}:${cnonce}`)
+    : initialHa1;
+  const ha2 = digestHash(algorithm, `${method}:${uri}`);
   const response = qop
-    ? md5(`${ha1}:${challenge.nonce}:${nc}:${cnonce}:${qop}:${ha2}`)
-    : md5(`${ha1}:${challenge.nonce}:${ha2}`);
+    ? digestHash(algorithm, `${ha1}:${challenge.nonce}:${nc}:${cnonce}:${qop}:${ha2}`)
+    : digestHash(algorithm, `${ha1}:${challenge.nonce}:${ha2}`);
   const fields = [
     `username="${username}"`, `realm="${challenge.realm}"`, `nonce="${challenge.nonce}"`,
-    `uri="${uri}"`, `response="${response}"`, `algorithm=${challenge.algorithm || "MD5"}`,
+    `uri="${uri}"`, `response="${response}"`, `algorithm=${algorithm}`,
   ];
   if (challenge.opaque) fields.push(`opaque="${challenge.opaque}"`);
   if (qop) fields.push(`qop=${qop}`, `nc=${nc}`, `cnonce="${cnonce}"`);

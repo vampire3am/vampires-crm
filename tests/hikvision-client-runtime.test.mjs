@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import http from "node:http";
 import { after, before, test } from "node:test";
 import { HikvisionClient } from "../bridge/hikvision-attendance/hikvision-client.mjs";
@@ -11,11 +12,16 @@ let authenticatedRequests = 0;
 before(async () => {
   server = http.createServer((request, response) => {
     if (!request.headers.authorization) {
-      response.writeHead(401, { "WWW-Authenticate": 'Digest realm="AECS", nonce="runtime-test", qop="auth"' });
+      response.writeHead(401, { "WWW-Authenticate": 'Digest realm="AECS", nonce="runtime-test", qop="auth", algorithm=SHA-256' });
       response.end();
       return;
     }
     assert.match(request.headers.authorization, /^Digest /);
+    const fields=Object.fromEntries([...request.headers.authorization.slice(7).matchAll(/([a-zA-Z0-9_-]+)=(?:"([^"]*)"|([^,\s]+))/g)].map(match=>[match[1],match[2]??match[3]]));
+    const hash=value=>createHash("sha256").update(value).digest("hex");
+    const ha1=hash(`admin:AECS:test-only`);
+    const ha2=hash(`${request.method}:${fields.uri}`);
+    assert.equal(fields.response,hash(`${ha1}:runtime-test:${fields.nc}:${fields.cnonce}:auth:${ha2}`));
     authenticatedRequests += 1;
     response.setHeader("Content-Type", "application/json");
     if (request.url.startsWith("/ISAPI/System/deviceInfo")) {
