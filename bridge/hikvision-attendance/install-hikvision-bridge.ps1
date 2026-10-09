@@ -49,7 +49,8 @@ $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccou
 $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
 
 Write-Host "Testing terminal and database connectivity..." -ForegroundColor Cyan
-& $node "$installRoot\index.mjs" $configPath --diagnose 2>&1 | Tee-Object -FilePath $stdout
+$diagnosticOutput = & $node "$installRoot\index.mjs" $configPath --diagnose 2>&1
+$diagnosticOutput | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) { throw "Diagnostics failed. Review $stdout before starting the background task." }
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName

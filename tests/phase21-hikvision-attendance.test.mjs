@@ -36,6 +36,7 @@ assert.match(bridge, /Terminal connection succeeded/);
 assert.match(bridge, /configPath/);
 assert.match(installer, /hikvision-request\.ps1/);
 assert.match(installer, /Get-Credential -UserName "admin"/);
+assert.doesNotMatch(installer, /Tee-Object -FilePath \$stdout/);
 assert.match(read("bridge/hikvision-attendance/hikvision-request.ps1"), /Invoke-WebRequest/);
 assert.match(read("bridge/hikvision-attendance/hikvision-client.mjs"), /administrator username or password \(HTTP 401\)/);
 assert.match(read("src/services/hrmsService.ts"), /throwRpcError\(error,"Employee record could not be saved"\)/);
