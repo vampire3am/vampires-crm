@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { digestRequest, HikvisionClient } from "../bridge/hikvision-attendance/hikvision-client.mjs";
 import { supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-sink.mjs";
@@ -69,6 +72,46 @@ test("Supabase secret keys are never sent as JWT bearer tokens", () => {
   const legacyHeaders = supabaseServiceHeaders("eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("apikey"), "eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("authorization"), "Bearer eyJlegacy-service-role-test");
+});
+
+test("Windows native Digest transport preserves attendance POST bodies", { skip: process.platform !== "win32" }, async () => {
+  const nativeServer = http.createServer((request, response) => {
+    if (!request.headers.authorization) {
+      response.writeHead(401, { "WWW-Authenticate": 'Digest realm="AECS", nonce="native-test", qop="auth", algorithm=MD5' });
+      response.end();
+      return;
+    }
+    assert.match(request.headers.authorization, /^Digest /);
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      assert.equal(JSON.parse(body).AcsEventCond.maxResults, 30);
+      response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify({ AcsEvent: { numOfMatches: 1, totalMatches: 1, InfoList: [
+        { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201 },
+      ] } }));
+    });
+  });
+  await new Promise(resolve => nativeServer.listen(0, "127.0.0.1", resolve));
+  const nativePort = nativeServer.address().port;
+  const directory = await mkdtemp(join(tmpdir(), "aecs-hikvision-test-"));
+  const configPath = join(directory, "bridge.config.json");
+  await writeFile(configPath, JSON.stringify({
+    deviceIp: "127.0.0.1", deviceHttpPort: nativePort, deviceSerial: "GR6140877",
+    deviceUsername: "admin", devicePassword: "test-only",
+  }));
+  try {
+    const client = new HikvisionClient({
+      deviceIp: "127.0.0.1", deviceHttpPort: nativePort, deviceSerial: "GR6140877",
+      deviceUsername: "admin", devicePassword: "test-only", configPath,
+    });
+    const events = await client.searchEvents(new Date("2026-10-04T08:00:00Z"), new Date("2026-10-04T09:00:00Z"));
+    assert.deepEqual(events.map(event => event.eventUid), ["201"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await new Promise((resolve, reject) => nativeServer.close(error => error ? reject(error) : resolve()));
+  }
 });
 
 test("Hikvision client falls back to compatibility auth when advertised Digest is rejected", async () => {

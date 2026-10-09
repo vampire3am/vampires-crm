@@ -9,47 +9,33 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
-$securePassword = ConvertTo-SecureString ([string]$config.devicePassword) -AsPlainText -Force
-$credential = New-Object System.Management.Automation.PSCredential ([string]$config.deviceUsername, $securePassword)
+$credential = New-Object System.Net.NetworkCredential ([string]$config.deviceUsername), ([string]$config.devicePassword)
 $uri = "http://$($config.deviceIp):$($config.deviceHttpPort)$Path"
-$parameters = @{
-  Uri = $uri
-  Method = $Method
-  Credential = $credential
-  UseBasicParsing = $true
-  ErrorAction = "Stop"
-}
-if ($BodyBase64) {
-  $parameters.Body = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($BodyBase64))
-  $parameters.ContentType = $ContentType
-}
-
 try {
-  $response = Invoke-WebRequest @parameters
-  $bodyBytes = [Text.Encoding]::UTF8.GetBytes([string]$response.Content)
+  Add-Type -AssemblyName System.Net.Http
+  $handler = New-Object System.Net.Http.HttpClientHandler
+  $handler.Credentials = $credential
+  $handler.PreAuthenticate = $true
+  $handler.UseDefaultCredentials = $false
+  $client = New-Object System.Net.Http.HttpClient($handler)
+  $client.Timeout = [TimeSpan]::FromSeconds(30)
+  $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::new($Method), $uri)
+  if ($BodyBase64) {
+    $bodyBytes = [Convert]::FromBase64String($BodyBase64)
+    $request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList @(,$bodyBytes)
+    $request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse($ContentType)
+  }
+  $response = $client.SendAsync($request).GetAwaiter().GetResult()
+  $responseBytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
   [ordered]@{
     status = [int]$response.StatusCode
-    bodyBase64 = [Convert]::ToBase64String($bodyBytes)
-    headers = @{ "content-type" = [string]$response.Headers["Content-Type"] }
+    bodyBase64 = [Convert]::ToBase64String($responseBytes)
+    headers = @{ "content-type" = [string]$response.Content.Headers.ContentType }
   } | ConvertTo-Json -Compress
 } catch {
-  $status = 0
-  $body = ""
-  if ($_.Exception.Response) {
-    try { $status = [int]$_.Exception.Response.StatusCode } catch {}
-    try {
-      $reader = New-Object IO.StreamReader($_.Exception.Response.GetResponseStream())
-      $body = $reader.ReadToEnd()
-      $reader.Dispose()
-    } catch {}
-  }
-  if ($status -gt 0) {
-    [ordered]@{
-      status = $status
-      bodyBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
-      headers = @{}
-    } | ConvertTo-Json -Compress
-  } else {
-    throw
-  }
+  throw
+} finally {
+  if ($request) { $request.Dispose() }
+  if ($client) { $client.Dispose() }
+  if ($handler) { $handler.Dispose() }
 }
