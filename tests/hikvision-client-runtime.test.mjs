@@ -11,7 +11,7 @@ import { supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-
 let server;
 let port;
 let authenticatedRequests = 0;
-let offsetQueries = 0;
+let recentQueries = 0;
 
 before(async () => {
   server = http.createServer((request, response) => {
@@ -42,13 +42,14 @@ before(async () => {
       assert.equal(condition.major, 5);
       assert.equal(condition.minor, 0);
       assert.match(condition.searchID, /^\d{1,16}$/);
-      if (!condition.startTime.endsWith("+05:45")) {
+      if (condition.startTime) {
         response.writeHead(400, { "Content-Type": "application/xml" });
         response.end('<ResponseStatus><statusCode>5</statusCode><subStatusCode>badJsonFormat</subStatusCode></ResponseStatus>');
         return;
       }
+      assert.equal(condition.timeReverseOrder, true);
       response.setHeader("Content-Type", "application/json");
-      offsetQueries += 1;
+      recentQueries += 1;
       response.end(JSON.stringify({ AcsEvent: { numOfMatches: 2, totalMatches: 2, InfoList: [
         { employeeNoString: "2", time: "2026-10-04T17:30:00", serialNo: 202, currentVerifyMode: "fingerPrint" },
         { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201, currentVerifyMode: "fingerPrint" },
@@ -61,7 +62,7 @@ before(async () => {
 
 after(async () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
 
-test("Hikvision client negotiates Digest auth and retries with offset timestamps", async () => {
+test("Hikvision client pages newest-first when legacy firmware rejects date fields", async () => {
   const client = new HikvisionClient({
     deviceIp: "127.0.0.1",
     deviceHttpPort: port,
@@ -74,7 +75,7 @@ test("Hikvision client negotiates Digest auth and retries with offset timestamps
   const events = await client.searchEvents(new Date("2026-10-04T00:00:00Z"), new Date("2026-10-06T00:00:00Z"));
   assert.deepEqual(events.map(event => event.eventUid), ["201", "202"]);
   assert.equal(events[0].deviceUserId, "2");
-  assert.equal(offsetQueries, 2);
+  assert.equal(recentQueries, 2);
   assert.ok(authenticatedRequests >= 2);
 });
 
@@ -107,7 +108,7 @@ test("Windows native Digest transport preserves attendance POST bodies", { skip:
       assert.doesNotMatch(condition.startTime, /(?:Z|[+-]\d{2}:\d{2})$/);
       response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify({ AcsEvent: { numOfMatches: 1, totalMatches: 1, InfoList: [
-        { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201 },
+        { employeeNoString: "2", time: "2026-10-04T13:45:00", serialNo: 201 },
       ] } }));
     });
   });

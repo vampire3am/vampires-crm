@@ -259,6 +259,14 @@ export class HikvisionClient {
           endTime: terminalTimestamp(windowEnd),
         };
         const offsetJsonBody = JSON.stringify({ AcsEventCond: offsetCondition });
+        const recentJsonBody = JSON.stringify({ AcsEventCond: {
+          searchID,
+          searchResultPosition: position,
+          maxResults,
+          major: 5,
+          minor: 0,
+          timeReverseOrder: true,
+        } });
         const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><AcsEventCond version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">${Object.entries(condition).map(([key, value]) => `<${key}>${xmlEscape(value)}</${key}>`).join("")}</AcsEventCond>`;
         let parsed;
         if (format === "json") {
@@ -277,6 +285,17 @@ export class HikvisionClient {
             headers: { Accept: "application/json", "Content-Type": "application/json; charset=UTF-8" },
             body: offsetJsonBody,
           }));
+          if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "recent";
+        }
+        // The earliest DS-K1A8503 builds reject startTime/endTime in this
+        // endpoint. Read newest-first in small pages, filter locally, and stop
+        // as soon as the terminal returns an event older than this window.
+        if (format === "recent") {
+          parsed = await parseEventResponse(await this.request("/ISAPI/AccessControl/AcsEvent?format=json", {
+            method: "POST",
+            headers: { Accept: "application/json", "Content-Type": "application/json; charset=UTF-8" },
+            body: recentJsonBody,
+          }));
           if (!parsed.ok && [400, 404, 405, 415].includes(parsed.status)) format = "xml";
         }
         if (format === "xml") {
@@ -289,13 +308,17 @@ export class HikvisionClient {
         if (!parsed?.ok) throw new Error(`Attendance event query failed with HTTP ${parsed?.status ?? "unknown"}: ${parsed?.detail ?? "no response body"}`);
         const payload = parsed.payload;
         const batch = eventList(payload);
+        let reachedOlderEvent = false;
         for (const raw of batch) {
           const event = normalizeHikvisionEvent(raw, this.deviceSerial);
-          if (event) results.push(event);
+          if (!event) continue;
+          const occurred = new Date(event.occurredAt).getTime();
+          if (format === "recent" && occurred < windowStart) reachedOlderEvent = true;
+          if (occurred >= windowStart && occurred <= windowEnd) results.push(event);
         }
         const reported = Number(payload?.AcsEvent?.numOfMatches ?? batch.length);
         const total = Number(payload?.AcsEvent?.totalMatches ?? position + reported);
-        if (reported < maxResults || position + reported >= total) break;
+        if (reachedOlderEvent || reported < maxResults || position + reported >= total) break;
       }
     }
     return [...new Map(results.map(event => [event.eventUid, event])).values()].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
