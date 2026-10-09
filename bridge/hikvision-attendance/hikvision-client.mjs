@@ -1,4 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
+
+const execFileAsync = promisify(execFile);
+const nativeHelperPath = fileURLToPath(new URL("./hikvision-request.ps1", import.meta.url));
 
 const digestHash = (algorithm, value) => {
   const normalized = String(algorithm || "MD5").toUpperCase();
@@ -58,6 +64,20 @@ export async function digestRequest({ baseUrl, username, password }, path, optio
   return fetch(url, { ...options, method, headers: compatibilityHeaders, redirect: "manual" });
 }
 
+async function windowsCredentialRequest(configPath, path, options = {}) {
+  const method = (options.method ?? "GET").toUpperCase();
+  const body = options.body == null ? "" : Buffer.from(String(options.body), "utf8").toString("base64");
+  const contentType = new Headers(options.headers).get("content-type") ?? "application/json";
+  const { stdout } = await execFileAsync("powershell.exe", [
+    "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", nativeHelperPath,
+    "-ConfigPath", configPath, "-Method", method, "-Path", path,
+    "-BodyBase64", body, "-ContentType", contentType,
+  ], { windowsHide: true, maxBuffer: 10 * 1024 * 1024 });
+  const envelope = JSON.parse(stdout.trim());
+  const responseBody = Buffer.from(envelope.bodyBase64 ?? "", "base64");
+  return new Response(responseBody, { status: Number(envelope.status), headers: envelope.headers ?? {} });
+}
+
 function localizeDeviceTimestamp(value) {
   if (!value) return null;
   const normalized = String(value).trim();
@@ -98,11 +118,18 @@ export class HikvisionClient {
       username: config.deviceUsername,
       password: config.devicePassword,
     };
+    this.configPath = config.configPath;
     this.deviceSerial = config.deviceSerial;
   }
 
+
+  async request(path, options = {}) {
+    if (process.platform === "win32" && this.configPath) return windowsCredentialRequest(this.configPath, path, options);
+    return digestRequest(this.auth, path, options);
+  }
+
   async deviceInfo() {
-    const response = await digestRequest(this.auth, "/ISAPI/System/deviceInfo?format=json", { headers: { Accept: "application/json" } });
+    const response = await this.request("/ISAPI/System/deviceInfo?format=json", { headers: { Accept: "application/json" } });
     if (!response.ok) {
       if (response.status === 401) throw new Error("The terminal rejected its administrator username or password (HTTP 401). Confirm the device web-admin credentials and retry.");
       if (response.status === 403) throw new Error("The terminal accepted the login but denied ISAPI device information (HTTP 403). Enable ISAPI/Open Network Video Interface access for the administrator.");
@@ -128,7 +155,7 @@ export class HikvisionClient {
           endTime: new Date(endTime).toISOString(),
         },
       });
-      const response = await digestRequest(this.auth, "/ISAPI/AccessControl/AcsEvent?format=json", {
+      const response = await this.request("/ISAPI/AccessControl/AcsEvent?format=json", {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         body,

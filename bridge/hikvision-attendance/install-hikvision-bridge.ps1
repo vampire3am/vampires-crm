@@ -28,6 +28,7 @@ if ($serviceRoleKey -notmatch '^(sb_secret_|eyJ)') {
 
 New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 Copy-Item "$PSScriptRoot\*.mjs" $installRoot -Force
+Copy-Item "$PSScriptRoot\hikvision-request.ps1" $installRoot -Force
 $config = [ordered]@{
   deviceIp = "192.168.100.80"; deviceHttpPort = 80; deviceSerial = "GR6140877"
   deviceUsername = $deviceUser; devicePassword = $devicePassword

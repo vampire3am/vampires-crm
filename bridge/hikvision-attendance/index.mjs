@@ -12,7 +12,7 @@ for (const field of ["deviceIp","deviceSerial","deviceUsername","devicePassword"
   if (!config[field]) throw new Error(`Missing required bridge configuration: ${field}`);
 }
 
-const client = new HikvisionClient(config);
+const client = new HikvisionClient({ ...config, configPath });
 const sink = new SupabaseAttendanceSink(config);
 const pollSeconds = Math.max(10, Number(config.pollSeconds ?? 30));
 const overlapMinutes = Math.max(1, Number(config.overlapMinutes ?? 10));
