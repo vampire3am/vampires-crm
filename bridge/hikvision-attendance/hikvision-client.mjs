@@ -48,7 +48,14 @@ export async function digestRequest({ baseUrl, username, password }, path, optio
   if (qop) fields.push(`qop=${qop}`, `nc=${nc}`, `cnonce="${cnonce}"`);
   const headers = new Headers(options.headers);
   headers.set("Authorization", `Digest ${fields.join(", ")}`);
-  return fetch(url, { ...options, method, headers, redirect: "manual" });
+  const digestResponse = await fetch(url, { ...options, method, headers, redirect: "manual" });
+  if (digestResponse.status !== 401) return digestResponse;
+
+  // Some older attendance terminals advertise Digest but only accept the
+  // compatibility authentication path used by Windows web clients.
+  const compatibilityHeaders = new Headers(options.headers);
+  compatibilityHeaders.set("Authorization", `Basic ${Buffer.from(`${username}:${password}`, "utf8").toString("base64")}`);
+  return fetch(url, { ...options, method, headers: compatibilityHeaders, redirect: "manual" });
 }
 
 function localizeDeviceTimestamp(value) {

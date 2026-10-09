@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import http from "node:http";
 import { after, before, test } from "node:test";
-import { HikvisionClient } from "../bridge/hikvision-attendance/hikvision-client.mjs";
+import { digestRequest, HikvisionClient } from "../bridge/hikvision-attendance/hikvision-client.mjs";
 import { supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-sink.mjs";
 
 let server;
@@ -63,4 +63,21 @@ test("Supabase secret keys are never sent as JWT bearer tokens", () => {
   const legacyHeaders = supabaseServiceHeaders("eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("apikey"), "eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("authorization"), "Bearer eyJlegacy-service-role-test");
+});
+
+test("Hikvision client falls back to compatibility auth when advertised Digest is rejected", async () => {
+  const fallbackServer=http.createServer((request,response)=>{
+    if(request.headers.authorization===`Basic ${Buffer.from("admin:test-only").toString("base64")}`){response.end("ok");return}
+    response.writeHead(401,{"WWW-Authenticate":'Digest realm="AECS", nonce="compatibility-test", qop="auth", algorithm=MD5'});
+    response.end();
+  });
+  await new Promise(resolve=>fallbackServer.listen(0,"127.0.0.1",resolve));
+  try{
+    const fallbackPort=fallbackServer.address().port;
+    const response=await digestRequest({baseUrl:`http://127.0.0.1:${fallbackPort}`,username:"admin",password:"test-only"},"/ISAPI/System/deviceInfo");
+    assert.equal(response.status,200);
+    assert.equal(await response.text(),"ok");
+  }finally{
+    await new Promise((resolve,reject)=>fallbackServer.close(error=>error?reject(error):resolve()));
+  }
 });
