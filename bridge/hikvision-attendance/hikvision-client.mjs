@@ -208,6 +208,7 @@ export class HikvisionClient {
     this.configPath = config.configPath;
     this.deviceSerial = config.deviceSerial;
     this.clockOffsetMs = 0;
+    this.onEventPage = config.onEventPage ?? null;
   }
 
 
@@ -254,7 +255,9 @@ export class HikvisionClient {
 
   async setClockToNepalTime() {
     const localTime = nepalTimestamp();
-    const body = `<?xml version="1.0" encoding="UTF-8"?><Time version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema"><timeMode>manual</timeMode><localTime>${localTime}</localTime></Time>`;
+    // Hikvision's Time schema requires timeZone even when timeMode is manual.
+    // It uses POSIX signs, so Nepal (UTC+05:45) is expressed as NPT-5:45:00.
+    const body = `<?xml version="1.0" encoding="UTF-8"?><Time version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema"><timeMode>manual</timeMode><localTime>${localTime}</localTime><timeZone>NPT-5:45:00</timeZone></Time>`;
     const response = await this.request("/ISAPI/System/time", {
       method: "PUT",
       headers: { Accept: "application/xml", "Content-Type": "application/xml; charset=UTF-8" },
@@ -356,6 +359,24 @@ export class HikvisionClient {
         if (!parsed?.ok) throw new Error(`Attendance event query failed with HTTP ${parsed?.status ?? "unknown"}: ${parsed?.detail ?? "no response body"}`);
         const payload = parsed.payload;
         const batch = eventList(payload);
+        const reported = Number(payload?.AcsEvent?.numOfMatches ?? batch.length);
+        const total = Number(payload?.AcsEvent?.totalMatches ?? position + reported);
+        if (this.onEventPage) {
+          this.onEventPage({
+            format,
+            windowStart: new Date(windowStart).toISOString(),
+            windowEnd: new Date(windowEnd).toISOString(),
+            position,
+            reported,
+            total,
+            clockOffsetSeconds: Math.round(this.clockOffsetMs / 1000),
+            sample: batch.slice(0, 3).map(raw => ({
+              employeeNo: raw.employeeNoString ?? raw.employeeNo ?? raw.personNo ?? raw.cardNo ?? raw.userID ?? null,
+              time: raw.time ?? raw.dateTime ?? raw.eventTime ?? raw.occurredAt ?? null,
+              serialNo: raw.serialNo ?? raw.eventID ?? raw.eventId ?? raw.sequenceNo ?? null,
+            })),
+          });
+        }
         let reachedOlderEvent = false;
         for (const raw of batch) {
           const event = normalizeHikvisionEvent(raw, this.deviceSerial, this.clockOffsetMs);
@@ -364,8 +385,6 @@ export class HikvisionClient {
           if (format === "recent" && occurred < windowStart) reachedOlderEvent = true;
           if (occurred >= windowStart && occurred <= windowEnd) results.push(event);
         }
-        const reported = Number(payload?.AcsEvent?.numOfMatches ?? batch.length);
-        const total = Number(payload?.AcsEvent?.totalMatches ?? position + reported);
         if (format === "recent" && position === 0 && reachedOlderEvent && total > maxResults) {
           // This firmware accepts timeReverseOrder but may silently ignore it.
           // Jump to the newest (last) page instead of walking through the

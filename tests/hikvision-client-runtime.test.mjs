@@ -93,6 +93,7 @@ test("Hikvision client pages newest-first when legacy firmware rejects date fiel
   await client.setClockToNepalTime();
   assert.match(clockPutBody, /<timeMode>manual<\/timeMode>/);
   assert.match(clockPutBody, /\+05:45<\/localTime>/);
+  assert.match(clockPutBody, /<timeZone>NPT-5:45:00<\/timeZone>/);
   assert.equal(client.clockOffsetMs, 0);
   const events = await client.searchEvents(new Date("2026-10-04T00:00:00Z"), new Date("2026-10-06T00:00:00Z"));
   assert.deepEqual(events.map(event => event.eventUid), ["201", "202"]);

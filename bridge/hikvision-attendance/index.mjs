@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { HikvisionClient } from "./hikvision-client.mjs";
 import { SupabaseAttendanceSink } from "./supabase-sink.mjs";
 
-const BRIDGE_VERSION = "1.1.0";
+const BRIDGE_VERSION = "1.1.1";
 const configPath = resolve(process.argv.find(argument => argument.endsWith(".json")) ?? process.env.AECS_HIKVISION_CONFIG ?? "bridge.config.json");
 const configText = (await readFile(configPath, "utf8")).replace(/^\uFEFF/, "");
 const config = JSON.parse(configText);
@@ -30,6 +30,10 @@ const log = (level, message, details) => {
     try { appendFileSync(config.logPath, `${line}\n`, "utf8"); } catch (error) { console.error(`Could not append bridge log: ${error.message}`); }
   }
 };
+
+if (process.argv.includes("--diagnose")) {
+  client.onEventPage = details => log("info", "Terminal event page inspected.", details);
+}
 
 async function syncOnce() {
   if (syncing) return;
