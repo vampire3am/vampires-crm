@@ -149,6 +149,12 @@ function xmlValue(xml, name) {
   return match ? xmlDecode(match[1].trim()) : undefined;
 }
 
+function hikvisionResponseAccepted(response, detail) {
+  if (!response.ok) return false;
+  const statusCode = xmlValue(detail, "statusCode");
+  return !statusCode || ["0", "1", "200"].includes(statusCode);
+}
+
 function xmlEventPayload(xml) {
   const text = String(xml).replace(/^\uFEFF/, "");
   const status = xmlValue(text, "statusCode");
@@ -263,11 +269,26 @@ export class HikvisionClient {
       headers: { Accept: "application/xml", "Content-Type": "application/xml; charset=UTF-8" },
       body,
     });
-    const detail = await response.text();
-    if (!response.ok) throw new Error(`Terminal time update failed with HTTP ${response.status}: ${detail.slice(0, 300)}`);
-    const statusCode = xmlValue(detail, "statusCode");
-    if (statusCode && !["0", "1", "200"].includes(statusCode)) {
-      throw new Error(`Terminal rejected its time update: ${xmlValue(detail, "subStatusCode") ?? xmlValue(detail, "statusString") ?? `status ${statusCode}`}`);
+    let detail = await response.text();
+    const combinedAccepted = hikvisionResponseAccepted(response, detail);
+    if (!combinedAccepted) {
+      // Older fingerprint-terminal firmware rejects the combined Time object,
+      // but implements the two scalar resources from the same ISAPI schema.
+      const timeZoneResponse = await this.request("/ISAPI/System/time/timeZone", {
+        method: "PUT",
+        headers: { Accept: "application/xml", "Content-Type": "text/plain; charset=UTF-8" },
+        body: "NPT-5:45:00",
+      });
+      const timeZoneDetail = await timeZoneResponse.text();
+      if (!hikvisionResponseAccepted(timeZoneResponse, timeZoneDetail)) throw new Error(`Terminal timezone update failed with HTTP ${timeZoneResponse.status}: ${timeZoneDetail.slice(0, 300)}`);
+      const localTimeResponse = await this.request("/ISAPI/System/time/localTime", {
+        method: "PUT",
+        headers: { Accept: "application/xml", "Content-Type": "text/plain; charset=UTF-8" },
+        body: localTime,
+      });
+      const localTimeDetail = await localTimeResponse.text();
+      if (!hikvisionResponseAccepted(localTimeResponse, localTimeDetail)) throw new Error(`Terminal local-time update failed with HTTP ${localTimeResponse.status}: ${localTimeDetail.slice(0, 300)}`);
+      detail = `${timeZoneDetail}\n${localTimeDetail}`;
     }
     this.clockOffsetMs = 0;
     return { localTime, detail };
@@ -382,8 +403,11 @@ export class HikvisionClient {
           const event = normalizeHikvisionEvent(raw, this.deviceSerial, this.clockOffsetMs);
           if (!event) continue;
           const occurred = new Date(event.occurredAt).getTime();
-          if (format === "recent" && occurred < windowStart) reachedOlderEvent = true;
-          if (occurred >= windowStart && occurred <= windowEnd) results.push(event);
+          if (format === "recent" && occurred < first) reachedOlderEvent = true;
+          // The device can return records just outside an individual query's
+          // day boundary when its configured UTC offset is wrong. Filter only
+          // against the caller's complete range after clock correction.
+          if (occurred >= first && occurred <= last) results.push(event);
         }
         if (format === "recent" && position === 0 && reachedOlderEvent && total > maxResults) {
           // This firmware accepts timeReverseOrder but may silently ignore it.

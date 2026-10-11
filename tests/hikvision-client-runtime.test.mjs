@@ -112,6 +112,43 @@ test("Supabase secret keys are never sent as JWT bearer tokens", () => {
   assert.equal(legacyHeaders.get("authorization"), "Bearer eyJlegacy-service-role-test");
 });
 
+test("clock-corrected events survive device day-boundary leakage", async () => {
+  let queryNumber = 0;
+  const boundaryServer = http.createServer((request, response) => {
+    if (!request.headers.authorization) {
+      response.writeHead(401, { "WWW-Authenticate": 'Digest realm="AECS", nonce="boundary-test", qop="auth", algorithm=MD5' });
+      response.end();
+      return;
+    }
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      queryNumber += 1;
+      const condition = JSON.parse(body).AcsEventCond;
+      const InfoList = queryNumber === 1 ? [
+        { employeeNoString: "9", time: "2026-10-11T09:57:49+08:00", serialNo: 107 },
+      ] : [];
+      response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify({ AcsEvent: { numOfMatches: InfoList.length, totalMatches: InfoList.length, InfoList, searchID: condition.searchID } }));
+    });
+  });
+  await new Promise(resolve => boundaryServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const client = new HikvisionClient({
+      deviceIp: "127.0.0.1", deviceHttpPort: boundaryServer.address().port, deviceSerial: "GR6140877",
+      deviceUsername: "admin", devicePassword: "test-only",
+    });
+    client.clockOffsetMs = 8_103_000;
+    const events = await client.searchEvents(new Date("2026-10-10T04:03:07.074Z"), new Date("2026-10-11T06:04:07.074Z"));
+    assert.deepEqual(events.map(event => event.eventUid), ["107"]);
+    assert.equal(events[0].deviceUserId, "9");
+    assert.ok(queryNumber >= 2);
+  } finally {
+    await new Promise((resolve, reject) => boundaryServer.close(error => error ? reject(error) : resolve()));
+  }
+});
+
 test("clock reconciliation replaces only the matching device event before re-ingestion", async () => {
   const requests = [];
   const api = http.createServer((request, response) => {
