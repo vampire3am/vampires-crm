@@ -51,4 +51,14 @@ $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccou
 $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
+Start-Sleep -Seconds 2
+$task = Get-ScheduledTask -TaskName $taskName
+$bridgeProcess = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.CommandLine -like "*$installRoot*index.mjs*" } |
+  Select-Object -First 1
+if ($task.State -ne "Running" -and -not $bridgeProcess) {
+  $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName
+  throw "The background bridge did not remain running (task result $($taskInfo.LastTaskResult))."
+}
+Write-Host "Background bridge verified: $($task.State). Attendance is checked every 30 seconds." -ForegroundColor Cyan
 Write-Host "Bridge repaired and started. Log: $installRoot\bridge.log" -ForegroundColor Green

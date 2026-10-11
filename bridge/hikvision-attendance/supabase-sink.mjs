@@ -7,6 +7,14 @@ export function supabaseServiceHeaders(key, initialHeaders) {
   return headers;
 }
 
+export function lateMinutesAfterCutoff(clockIn, cutoffHour = 10, cutoffMinute = 15) {
+  const instant = Date.parse(clockIn);
+  if (!Number.isFinite(instant)) return 0;
+  const nepal = new Date(instant + 345 * 60_000);
+  const arrivalMinutes = nepal.getUTCHours() * 60 + nepal.getUTCMinutes();
+  return Math.max(0, arrivalMinutes - (cutoffHour * 60 + cutoffMinute));
+}
+
 export class SupabaseAttendanceSink {
   constructor(config) {
     this.baseUrl = config.supabaseUrl.replace(/\/$/, "");
@@ -55,6 +63,27 @@ export class SupabaseAttendanceSink {
         p_raw_payload: event.raw,
       }),
     });
+  }
+
+  async enforceAttendanceRules(event) {
+    if (!this.deviceId) await this.device();
+    const device = encodeURIComponent(this.deviceId);
+    const eventUid = encodeURIComponent(event.eventUid);
+    const deviceEvents = await this.request(`hr_attendance_device_events?device_id=eq.${device}&event_uid=eq.${eventUid}&select=employee_id,attendance_date&limit=1`);
+    const deviceEvent = deviceEvents?.[0];
+    if (!deviceEvent?.employee_id || !deviceEvent?.attendance_date) return null;
+    const employee = encodeURIComponent(deviceEvent.employee_id);
+    const date = encodeURIComponent(deviceEvent.attendance_date);
+    const rows = await this.request(`hr_attendance?employee_id=eq.${employee}&attendance_date=eq.${date}&select=id,clock_in,clock_out&limit=1`);
+    const attendance = rows?.[0];
+    if (!attendance?.id || !attendance.clock_in) return null;
+    const lateMinutes = lateMinutesAfterCutoff(attendance.clock_in);
+    await this.request(`hr_attendance?id=eq.${encodeURIComponent(attendance.id)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ status: lateMinutes > 0 ? "LATE" : "PRESENT", late_minutes: lateMinutes }),
+    });
+    return { attendanceId: attendance.id, lateMinutes, clockedOut: Boolean(attendance.clock_out) };
   }
 
   async replaceClockCorrectedEvent(event) {

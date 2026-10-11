@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { HikvisionClient } from "./hikvision-client.mjs";
 import { SupabaseAttendanceSink } from "./supabase-sink.mjs";
 
-const BRIDGE_VERSION = "1.1.2";
+const BRIDGE_VERSION = "1.2.0";
 const configPath = resolve(process.argv.find(argument => argument.endsWith(".json")) ?? process.env.AECS_HIKVISION_CONFIG ?? "bridge.config.json");
 const configText = (await readFile(configPath, "utf8")).replace(/^\uFEFF/, "");
 const config = JSON.parse(configText);
@@ -53,6 +53,7 @@ async function syncOnce() {
       if (result?.status === "DUPLICATE" && Math.abs(client.clockOffsetMs) >= 60_000) {
         result = await sink.replaceClockCorrectedEvent(event);
       }
+      await sink.enforceAttendanceRules(event);
       const status = result?.status ?? "PROCESSED";
       if (status === "PROCESSED") summary.processed += 1;
       else if (status === "DUPLICATE") summary.duplicate += 1;

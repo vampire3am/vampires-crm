@@ -35,6 +35,7 @@ assert.match(bridge, /reconciliationHours/);
 assert.match(bridge, /prepareTerminalClock/);
 assert.match(bridge, /repairTerminalClock/);
 assert.match(bridge, /replaceClockCorrectedEvent/);
+assert.match(bridge, /enforceAttendanceRules/);
 assert.match(bridge, /replace\(\/\^\\uFEFF\//);
 assert.match(bridge, /Terminal connection succeeded/);
 assert.match(bridge, /configPath/);
@@ -46,6 +47,9 @@ assert.match(read("bridge/hikvision-attendance/hikvision-client.mjs"), /administ
 assert.match(read("src/services/hrmsService.ts"), /throwRpcError\(error,"Employee record could not be saved"\)/);
 assert.match(read("src/features/hrms/HrmsWorkspace.tsx"), /Device user number already assigned/);
 assert.match(installer, /-RestartCount 999/);
+assert.match(installer, /Background bridge verified/);
+assert.match(workspace, /PUNCHED OUT/);
+assert.match(workspace, /30_000/);
 assert.match(installer, /UTF8Encoding\(\$false\)/);
 assert.match(installer, /icacls/);
 assert.match(installer, /project URL was entered where the secret key is required/);

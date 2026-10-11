@@ -80,6 +80,7 @@ interface AttendanceRecord {
   clockInAt?: string | null;
   checkIn: string;
   checkOut: string;
+  isClockedOut?: boolean;
   workedHours: string;
   status: "PRESENT" | "LATE" | "HALF_DAY" | "ON_LEAVE" | "ABSENT";
   lateMinutes?: number;
@@ -276,6 +277,34 @@ export function HrmsWorkspace() {
     return () => {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshDay);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshAttendance = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const [attendanceRows, ownAttendance, deviceRows, unmappedRows] = await Promise.all([
+          HrmsService.getAttendance(), HrmsService.getMyTodayAttendance(), HrmsService.getAttendanceDevices(), HrmsService.getUnmappedDeviceEvents(),
+        ]);
+        if (!active) return;
+        setAttendance(attendanceRows as AttendanceRecord[]);
+        setMyAttendance(ownAttendance);
+        setAttendanceDevices(deviceRows as AttendanceDevice[]);
+        setUnmappedDeviceEvents(unmappedRows as UnmappedDeviceEvent[]);
+      } catch {
+        // Keep the last good attendance snapshot; the normal page loader shows
+        // actionable errors and the next interval retries automatically.
+      }
+    };
+    const timer = window.setInterval(() => void refreshAttendance(), 30_000);
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") void refreshAttendance(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);
   const [selectedAttendanceMonth, setSelectedAttendanceMonth] = useState<string | null>(null);
@@ -940,8 +969,8 @@ export function HrmsWorkspace() {
                       )}
                     </td>
                     <td>
-                      <span className={`badge-status ${att.status === "PRESENT" ? "enrolled" : att.status === "LATE" ? "counselling" : "new-lead"}`}>
-                        {att.status}
+                      <span className={`badge-status ${att.isClockedOut ? "purple" : att.status === "PRESENT" ? "enrolled" : att.status === "LATE" ? "counselling" : "new-lead"}`}>
+                        {att.isClockedOut ? "PUNCHED OUT" : att.status}
                       </span>
                     </td>
                   </tr>

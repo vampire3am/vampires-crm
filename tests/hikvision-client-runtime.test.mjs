@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { digestRequest, HikvisionClient } from "../bridge/hikvision-attendance/hikvision-client.mjs";
-import { SupabaseAttendanceSink, supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-sink.mjs";
+import { lateMinutesAfterCutoff, SupabaseAttendanceSink, supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-sink.mjs";
 
 let server;
 let port;
@@ -110,6 +110,49 @@ test("Supabase secret keys are never sent as JWT bearer tokens", () => {
   const legacyHeaders = supabaseServiceHeaders("eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("apikey"), "eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("authorization"), "Bearer eyJlegacy-service-role-test");
+});
+
+test("fixed 10:15 Nepal cutoff calculates whole late minutes", () => {
+  assert.equal(lateMinutesAfterCutoff("2026-10-11T04:29:59.000Z"), 0);
+  assert.equal(lateMinutesAfterCutoff("2026-10-11T04:30:00.000Z"), 0);
+  assert.equal(lateMinutesAfterCutoff("2026-10-11T04:30:59.000Z"), 0);
+  assert.equal(lateMinutesAfterCutoff("2026-10-11T04:31:00.000Z"), 1);
+  assert.equal(lateMinutesAfterCutoff("2026-10-11T04:45:00.000Z"), 15);
+});
+
+test("bridge enforces the fixed cutoff on existing attendance rows", async () => {
+  let patchedBody;
+  const api = http.createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      response.setHeader("Content-Type", "application/json");
+      if (request.url.startsWith("/rest/v1/hr_attendance_device_events")) {
+        response.end(JSON.stringify([{ employee_id: "employee-one", attendance_date: "2026-10-11" }]));
+      } else if (request.method === "GET") {
+        response.end(JSON.stringify([{ id: "attendance-one", clock_in: "2026-10-11T04:39:20.000Z", clock_out: "2026-10-11T06:00:00.000Z" }]));
+      } else {
+        patchedBody = JSON.parse(body);
+        response.writeHead(204);
+        response.end();
+      }
+    });
+  });
+  await new Promise(resolve => api.listen(0, "127.0.0.1", resolve));
+  try {
+    const sink = new SupabaseAttendanceSink({
+      supabaseUrl: `http://127.0.0.1:${api.address().port}`,
+      supabaseServiceRoleKey: "sb_secret_test-only",
+      deviceSerial: "GR6140877",
+    });
+    sink.deviceId = "device-one";
+    const result = await sink.enforceAttendanceRules({ eventUid: "107" });
+    assert.deepEqual(patchedBody, { status: "LATE", late_minutes: 9 });
+    assert.equal(result.clockedOut, true);
+  } finally {
+    await new Promise((resolve, reject) => api.close(error => error ? reject(error) : resolve()));
+  }
 });
 
 test("clock-corrected events survive device day-boundary leakage", async () => {
