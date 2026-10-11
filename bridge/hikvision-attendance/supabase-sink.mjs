@@ -28,6 +28,7 @@ export class SupabaseAttendanceSink {
     const serial = encodeURIComponent(this.deviceSerial);
     const rows = await this.request(`hr_attendance_devices?serial_number=eq.${serial}&select=*`);
     if (!rows?.length) throw new Error(`Device ${this.deviceSerial} is not registered. Run the Hikvision attendance migration first.`);
+    this.deviceId = rows[0].id;
     return rows[0];
   }
 
@@ -54,5 +55,23 @@ export class SupabaseAttendanceSink {
         p_raw_payload: event.raw,
       }),
     });
+  }
+
+  async replaceClockCorrectedEvent(event) {
+    if (!this.deviceId) await this.device();
+    const device = encodeURIComponent(this.deviceId);
+    const eventUid = encodeURIComponent(event.eventUid);
+    const rows = await this.request(`hr_attendance_device_events?device_id=eq.${device}&event_uid=eq.${eventUid}&select=id,occurred_at`);
+    if (!rows?.length) return this.ingest(event);
+    const previousTime = Date.parse(rows[0].occurred_at);
+    const correctedTime = Date.parse(event.occurredAt);
+    if (!Number.isFinite(previousTime) || !Number.isFinite(correctedTime) || Math.abs(previousTime - correctedTime) < 60_000) {
+      return { status: "DUPLICATE", event_uid: event.eventUid };
+    }
+    await this.request(`hr_attendance_device_events?id=eq.${encodeURIComponent(rows[0].id)}`, {
+      method: "DELETE",
+      headers: { Prefer: "return=minimal" },
+    });
+    return this.ingest(event);
   }
 }

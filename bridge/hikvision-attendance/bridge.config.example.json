@@ -9,5 +9,7 @@
   "pollSeconds": 30,
   "overlapMinutes": 10,
   "initialLookbackDays": 1,
+  "reconciliationHours": 26,
+  "reconciliationMinutes": 5,
   "logPath": "C:\\ProgramData\\AECS\\HikvisionAttendanceBridge\\bridge.log"
 }

@@ -4,6 +4,8 @@ This server-side bridge polls the DS-K1A8503EF-B terminal through Hikvision ISAP
 
 The terminal may keep its configured EHome 4.0 connection enabled. This bridge does not consume port 7660; EHome push requires Hikvision's matching proprietary SDK runtime.
 
+The bridge performs a bounded 26-hour reconciliation every five minutes so a temporary network outage cannot skip punches. At startup it measures the terminal clock against the CRM server, corrects that reconciliation batch when the drift is at least one minute, and updates the terminal to Nepal time for subsequent punches.
+
 ## Before installation
 
 1. Apply `supabase/migrations/202610040001_hikvision_attendance_bridge.sql` in Supabase.

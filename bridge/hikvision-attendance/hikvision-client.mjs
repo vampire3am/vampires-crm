@@ -106,18 +106,19 @@ function localizeDeviceTimestamp(value) {
   return normalized;
 }
 
-export function normalizeHikvisionEvent(raw, deviceSerial) {
+export function normalizeHikvisionEvent(raw, deviceSerial, clockOffsetMs = 0) {
   const deviceUserId = raw.employeeNoString ?? raw.employeeNo ?? raw.personNo ?? raw.cardNo ?? raw.userID;
   const occurredAt = localizeDeviceTimestamp(raw.time ?? raw.dateTime ?? raw.eventTime ?? raw.occurredAt);
   if (!deviceUserId || !occurredAt || Number.isNaN(Date.parse(occurredAt))) return null;
+  const correctedOccurredAt = new Date(Date.parse(occurredAt) + Number(clockOffsetMs || 0)).toISOString();
   const serial = raw.serialNo ?? raw.eventID ?? raw.eventId ?? raw.sequenceNo;
   const eventUid = serial == null
-    ? md5([deviceSerial,deviceUserId,occurredAt,raw.major,raw.minor,raw.attendanceStatus].join("|"))
+    ? md5([deviceSerial,deviceUserId,correctedOccurredAt,raw.major,raw.minor,raw.attendanceStatus].join("|"))
     : String(serial);
   return {
     eventUid,
     deviceUserId: String(deviceUserId).trim(),
-    occurredAt: new Date(occurredAt).toISOString(),
+    occurredAt: correctedOccurredAt,
     eventKind: raw.eventKind ?? raw.subEventType ?? "FINGERPRINT",
     authenticationMode: raw.currentVerifyMode ?? raw.verifyMode ?? raw.authenticationMode ?? null,
     attendanceStatus: raw.attendanceStatus ?? raw.attendanceState ?? null,
@@ -185,6 +186,11 @@ function legacyTerminalTimestamp(value) {
   return new Date(new Date(value).getTime() + 345 * 60_000).toISOString().slice(0, 19);
 }
 
+function nepalTimestamp(value = Date.now()) {
+  const shifted = new Date(new Date(value).getTime() + 345 * 60_000);
+  return `${shifted.toISOString().slice(0, 19)}+05:45`;
+}
+
 async function parseEventResponse(response) {
   const text = await response.text();
   if (!response.ok) return { ok: false, status: response.status, detail: text.slice(0, 500) };
@@ -201,6 +207,7 @@ export class HikvisionClient {
     };
     this.configPath = config.configPath;
     this.deviceSerial = config.deviceSerial;
+    this.clockOffsetMs = 0;
   }
 
 
@@ -224,6 +231,43 @@ export class HikvisionClient {
     }
     const text = await response.text();
     try { return JSON.parse(text); } catch { return { raw: text }; }
+  }
+
+  async calibrateClock() {
+    const response = await this.request("/ISAPI/System/time", { headers: { Accept: "application/xml, application/json" } });
+    if (!response.ok) throw new Error(`Terminal time request failed with HTTP ${response.status}.`);
+    const raw = await response.text();
+    let localTime;
+    try {
+      const payload = JSON.parse(raw);
+      localTime = payload?.Time?.localTime ?? payload?.localTime;
+    } catch {
+      localTime = xmlValue(raw, "localTime");
+    }
+    if (!localTime) throw new Error("Terminal time response did not contain localTime.");
+    const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(localTime) ? localTime : `${localTime}+05:45`;
+    const deviceInstant = Date.parse(normalized);
+    if (Number.isNaN(deviceInstant)) throw new Error(`Terminal returned an invalid local time: ${localTime}`);
+    this.clockOffsetMs = Date.now() - deviceInstant;
+    return { localTime, driftMs: this.clockOffsetMs };
+  }
+
+  async setClockToNepalTime() {
+    const localTime = nepalTimestamp();
+    const body = `<?xml version="1.0" encoding="UTF-8"?><Time version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema"><timeMode>manual</timeMode><localTime>${localTime}</localTime></Time>`;
+    const response = await this.request("/ISAPI/System/time", {
+      method: "PUT",
+      headers: { Accept: "application/xml", "Content-Type": "application/xml; charset=UTF-8" },
+      body,
+    });
+    const detail = await response.text();
+    if (!response.ok) throw new Error(`Terminal time update failed with HTTP ${response.status}: ${detail.slice(0, 300)}`);
+    const statusCode = xmlValue(detail, "statusCode");
+    if (statusCode && !["0", "1", "200"].includes(statusCode)) {
+      throw new Error(`Terminal rejected its time update: ${xmlValue(detail, "subStatusCode") ?? xmlValue(detail, "statusString") ?? `status ${statusCode}`}`);
+    }
+    this.clockOffsetMs = 0;
+    return { localTime, detail };
   }
 
   async searchEvents(startTime, endTime) {
@@ -310,7 +354,7 @@ export class HikvisionClient {
         const batch = eventList(payload);
         let reachedOlderEvent = false;
         for (const raw of batch) {
-          const event = normalizeHikvisionEvent(raw, this.deviceSerial);
+          const event = normalizeHikvisionEvent(raw, this.deviceSerial, this.clockOffsetMs);
           if (!event) continue;
           const occurred = new Date(event.occurredAt).getTime();
           if (format === "recent" && occurred < windowStart) reachedOlderEvent = true;

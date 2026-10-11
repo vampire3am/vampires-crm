@@ -31,6 +31,10 @@ assert.match(permissions, /attendance\.mapping\.manage/);
 
 assert.match(bridge, /overlapMinutes/);
 assert.match(bridge, /initialLookbackDays/);
+assert.match(bridge, /reconciliationHours/);
+assert.match(bridge, /prepareTerminalClock/);
+assert.match(bridge, /repairTerminalClock/);
+assert.match(bridge, /replaceClockCorrectedEvent/);
 assert.match(bridge, /replace\(\/\^\\uFEFF\//);
 assert.match(bridge, /Terminal connection succeeded/);
 assert.match(bridge, /configPath/);
@@ -57,6 +61,7 @@ assert.equal(normalized.deviceUserId, "4");
 assert.equal(normalized.eventUid, "55");
 assert.equal(normalized.occurredAt, "2026-10-04T02:30:00.000Z");
 assert.equal(normalized.authenticationMode, "fingerPrint");
+assert.equal(normalizeHikvisionEvent({ employeeNoString: "4", time: "2026-10-04T08:15:00", serialNo: 56 }, "GR6140877", 120_000).occurredAt, "2026-10-04T02:32:00.000Z");
 assert.equal(normalizeHikvisionEvent({ time: "invalid" }, "GR6140877"), null);
 
 console.log("phase21 Hikvision attendance checks passed");

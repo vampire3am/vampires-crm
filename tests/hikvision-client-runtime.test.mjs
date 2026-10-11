@@ -6,12 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { digestRequest, HikvisionClient } from "../bridge/hikvision-attendance/hikvision-client.mjs";
-import { supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-sink.mjs";
+import { SupabaseAttendanceSink, supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-sink.mjs";
 
 let server;
 let port;
 let authenticatedRequests = 0;
 let recentQueries = 0;
+let clockPutBody = "";
 
 before(async () => {
   server = http.createServer((request, response) => {
@@ -33,10 +34,22 @@ before(async () => {
       response.end(JSON.stringify({ DeviceInfo: { model: "DS-K1A8503EF-B", serialNumber: "GR6140877" } }));
       return;
     }
+    if (request.url.startsWith("/ISAPI/System/time") && request.method === "GET") {
+      const shifted = new Date(Date.now() - 120_000 + 345 * 60_000).toISOString().slice(0, 19);
+      response.setHeader("Content-Type", "application/xml");
+      response.end(`<Time><timeMode>manual</timeMode><localTime>${shifted}+05:45</localTime></Time>`);
+      return;
+    }
     let body = "";
     request.setEncoding("utf8");
     request.on("data", chunk => { body += chunk; });
     request.on("end", () => {
+      if (request.url.startsWith("/ISAPI/System/time") && request.method === "PUT") {
+        clockPutBody = body;
+        response.setHeader("Content-Type", "application/xml");
+        response.end("<ResponseStatus><statusCode>1</statusCode></ResponseStatus>");
+        return;
+      }
       const condition = JSON.parse(body).AcsEventCond;
       assert.equal(condition.maxResults, 10);
       assert.equal(condition.major, 5);
@@ -72,6 +85,12 @@ test("Hikvision client pages newest-first when legacy firmware rejects date fiel
   });
   const info = await client.deviceInfo();
   assert.equal(info.DeviceInfo.model, "DS-K1A8503EF-B");
+  const clock = await client.calibrateClock();
+  assert.ok(clock.driftMs >= 110_000 && clock.driftMs <= 130_000);
+  await client.setClockToNepalTime();
+  assert.match(clockPutBody, /<timeMode>manual<\/timeMode>/);
+  assert.match(clockPutBody, /\+05:45<\/localTime>/);
+  assert.equal(client.clockOffsetMs, 0);
   const events = await client.searchEvents(new Date("2026-10-04T00:00:00Z"), new Date("2026-10-06T00:00:00Z"));
   assert.deepEqual(events.map(event => event.eventUid), ["201", "202"]);
   assert.equal(events[0].deviceUserId, "2");
@@ -87,6 +106,41 @@ test("Supabase secret keys are never sent as JWT bearer tokens", () => {
   const legacyHeaders = supabaseServiceHeaders("eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("apikey"), "eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("authorization"), "Bearer eyJlegacy-service-role-test");
+});
+
+test("clock reconciliation replaces only the matching device event before re-ingestion", async () => {
+  const requests = [];
+  const api = http.createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      requests.push({ method: request.method, url: request.url, body });
+      response.setHeader("Content-Type", "application/json");
+      if (request.method === "GET") response.end(JSON.stringify([{ id: "old-event", occurred_at: "2026-10-11T01:57:00.000Z" }]));
+      else if (request.method === "DELETE") { response.writeHead(204); response.end(); }
+      else response.end(JSON.stringify({ status: "PROCESSED" }));
+    });
+  });
+  await new Promise(resolve => api.listen(0, "127.0.0.1", resolve));
+  try {
+    const sink = new SupabaseAttendanceSink({
+      supabaseUrl: `http://127.0.0.1:${api.address().port}`,
+      supabaseServiceRoleKey: "sb_secret_test-only",
+      deviceSerial: "GR6140877",
+    });
+    sink.deviceId = "device-one";
+    const result = await sink.replaceClockCorrectedEvent({
+      eventUid: "501", deviceUserId: "4", occurredAt: "2026-10-11T03:17:00.000Z",
+      eventKind: "FINGERPRINT", authenticationMode: "fingerPrint", attendanceStatus: null, raw: {},
+    });
+    assert.equal(result.status, "PROCESSED");
+    assert.deepEqual(requests.map(item => item.method), ["GET", "DELETE", "POST"]);
+    assert.match(requests[0].url, /device_id=eq\.device-one&event_uid=eq\.501/);
+    assert.match(requests[1].url, /id=eq\.old-event/);
+  } finally {
+    await new Promise((resolve, reject) => api.close(error => error ? reject(error) : resolve()));
+  }
 });
 
 test("Windows native Digest transport preserves attendance POST bodies", { skip: process.platform !== "win32" }, async () => {
