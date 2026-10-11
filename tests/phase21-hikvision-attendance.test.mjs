@@ -47,7 +47,8 @@ assert.match(read("bridge/hikvision-attendance/hikvision-client.mjs"), /administ
 assert.match(read("src/services/hrmsService.ts"), /throwRpcError\(error,"Employee record could not be saved"\)/);
 assert.match(read("src/features/hrms/HrmsWorkspace.tsx"), /Device user number already assigned/);
 assert.match(installer, /-RestartCount 999/);
-assert.match(installer, /Background bridge verified/);
+assert.match(installer, /Supervised background bridge verified/);
+assert.match(installer, /run-hikvision-bridge\.ps1/);
 assert.match(workspace, /PUNCHED OUT/);
 assert.match(workspace, /30_000/);
 assert.match(installer, /UTF8Encoding\(\$false\)/);

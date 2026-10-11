@@ -30,11 +30,12 @@ if ($serviceRoleKey -notmatch '^(sb_secret_|eyJ)') {
 New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 Copy-Item "$PSScriptRoot\*.mjs" $installRoot -Force
 Copy-Item "$PSScriptRoot\hikvision-request.ps1" $installRoot -Force
+Copy-Item "$PSScriptRoot\run-hikvision-bridge.ps1" $installRoot -Force
 $config = [ordered]@{
   deviceIp = "192.168.100.80"; deviceHttpPort = 80; deviceSerial = "GR6140877"
   deviceUsername = $deviceUser; devicePassword = $devicePassword
   supabaseUrl = "https://igzrcgicslcgbowzrtzz.supabase.co"; supabaseServiceRoleKey = $serviceRoleKey
-  pollSeconds = 30; overlapMinutes = 10; initialLookbackDays = 1
+  pollSeconds = 10; overlapMinutes = 10; initialLookbackDays = 1; reconciliationMinutes = 1
   logPath = "$installRoot\bridge.log"
 }
 $configPath = Join-Path $installRoot "bridge.config.json"
@@ -43,25 +44,32 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 & icacls $installRoot /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" | Out-Null
 
 $stdout = Join-Path $installRoot "bridge.log"
-$action = New-ScheduledTaskAction -Execute $node -Argument "`"$installRoot\index.mjs`" `"$configPath`"" -WorkingDirectory $installRoot
+$powerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$runner = Join-Path $installRoot "run-hikvision-bridge.ps1"
+$action = New-ScheduledTaskAction -Execute $powerShell -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runner`" -NodePath `"$node`" -InstallRoot `"$installRoot`"" -WorkingDirectory $installRoot
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
+$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
 
 Write-Host "Testing terminal and database connectivity..." -ForegroundColor Cyan
 $diagnosticOutput = & $node "$installRoot\index.mjs" $configPath --diagnose 2>&1
 $diagnosticOutput | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) { throw "Diagnostics failed. Review $stdout before starting the background task." }
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+$backgroundStartedAt = (Get-Date).ToUniversalTime()
 Start-ScheduledTask -TaskName $taskName
-Start-Sleep -Seconds 2
-$task = Get-ScheduledTask -TaskName $taskName
-$bridgeProcess = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
-  Where-Object { $_.CommandLine -like "*$installRoot*index.mjs*" } |
-  Select-Object -First 1
-if ($task.State -ne "Running" -and -not $bridgeProcess) {
-  $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName
-  throw "The background bridge did not remain running (task result $($taskInfo.LastTaskResult))."
+for ($attempt = 0; $attempt -lt 20; $attempt++) {
+  Start-Sleep -Seconds 1
+  $task = Get-ScheduledTask -TaskName $taskName
+  $bridgeProcess = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like "*$installRoot*index.mjs*" } |
+    Select-Object -First 1
+  $freshLog = (Test-Path -LiteralPath "$installRoot\bridge.log" -PathType Leaf) -and (Get-Item -LiteralPath "$installRoot\bridge.log").LastWriteTimeUtc -gt $backgroundStartedAt
+  if ($task.State -eq "Running" -and $bridgeProcess -and $freshLog) { break }
 }
-Write-Host "Background bridge verified: $($task.State). Attendance is checked every 30 seconds." -ForegroundColor Cyan
+if ($task.State -ne "Running" -or -not $bridgeProcess -or -not $freshLog) {
+  $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName
+  throw "The supervised background bridge failed its live check (task state $($task.State), result $($taskInfo.LastTaskResult)). Review $installRoot\supervisor.log."
+}
+Write-Host "Supervised background bridge verified: Running. Attendance is checked every 10 seconds." -ForegroundColor Cyan
 Write-Host "Bridge installed and started. Log: $stdout" -ForegroundColor Green
