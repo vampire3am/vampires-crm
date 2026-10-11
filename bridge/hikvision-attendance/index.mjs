@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { HikvisionClient } from "./hikvision-client.mjs";
 import { SupabaseAttendanceSink } from "./supabase-sink.mjs";
 
-const BRIDGE_VERSION = "1.2.1";
+const BRIDGE_VERSION = "1.3.0";
 const configPath = resolve(process.argv.find(argument => argument.endsWith(".json")) ?? process.env.AECS_HIKVISION_CONFIG ?? "bridge.config.json");
 const configText = (await readFile(configPath, "utf8")).replace(/^\uFEFF/, "");
 const config = JSON.parse(configText);
@@ -14,7 +14,7 @@ for (const field of ["deviceIp","deviceSerial","deviceUsername","devicePassword"
 
 const client = new HikvisionClient({ ...config, configPath });
 const sink = new SupabaseAttendanceSink(config);
-const pollSeconds = Math.max(10, Number(config.pollSeconds ?? 30));
+const pollSeconds = Math.max(3, Number(config.pollSeconds ?? 3));
 const overlapMinutes = Math.max(1, Number(config.overlapMinutes ?? 10));
 const initialLookbackDays = Math.max(1, Number(config.initialLookbackDays ?? 1));
 const reconciliationHours = Math.max(1, Number(config.reconciliationHours ?? 26));

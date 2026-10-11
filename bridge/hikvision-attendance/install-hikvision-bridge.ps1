@@ -35,7 +35,7 @@ $config = [ordered]@{
   deviceIp = "192.168.100.80"; deviceHttpPort = 80; deviceSerial = "GR6140877"
   deviceUsername = $deviceUser; devicePassword = $devicePassword
   supabaseUrl = "https://igzrcgicslcgbowzrtzz.supabase.co"; supabaseServiceRoleKey = $serviceRoleKey
-  pollSeconds = 10; overlapMinutes = 10; initialLookbackDays = 1; reconciliationMinutes = 1
+  pollSeconds = 3; overlapMinutes = 10; initialLookbackDays = 1; reconciliationMinutes = 1
   logPath = "$installRoot\bridge.log"
 }
 $configPath = Join-Path $installRoot "bridge.config.json"
@@ -71,5 +71,5 @@ if ($task.State -ne "Running" -or -not $bridgeProcess -or -not $freshLog) {
   $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName
   throw "The supervised background bridge failed its live check (task state $($task.State), result $($taskInfo.LastTaskResult)). Review $installRoot\supervisor.log."
 }
-Write-Host "Supervised background bridge verified: Running. Attendance is checked every 10 seconds." -ForegroundColor Cyan
+Write-Host "Supervised background bridge verified: Running. Attendance is checked every 3 seconds." -ForegroundColor Cyan
 Write-Host "Bridge installed and started. Log: $stdout" -ForegroundColor Green

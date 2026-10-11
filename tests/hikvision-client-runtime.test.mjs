@@ -5,7 +5,7 @@ import http from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { digestRequest, HikvisionClient } from "../bridge/hikvision-attendance/hikvision-client.mjs";
+import { digestRequest, HikvisionClient, normalizeHikvisionEvent } from "../bridge/hikvision-attendance/hikvision-client.mjs";
 import { lateMinutesAfterCutoff, SupabaseAttendanceSink, supabaseServiceHeaders } from "../bridge/hikvision-attendance/supabase-sink.mjs";
 
 let server;
@@ -110,6 +110,22 @@ test("Supabase secret keys are never sent as JWT bearer tokens", () => {
   const legacyHeaders = supabaseServiceHeaders("eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("apikey"), "eyJlegacy-service-role-test");
   assert.equal(legacyHeaders.get("authorization"), "Bearer eyJlegacy-service-role-test");
+});
+
+test("RFID card authentication events retain the employee mapping and card mode", () => {
+  const employeeCardEvent = normalizeHikvisionEvent({
+    employeeNoString: "6", cardNo: "1234567890", time: "2026-10-11T10:10:00+05:45",
+    serialNo: 301, currentVerifyMode: "card",
+  }, "GR6140877");
+  assert.equal(employeeCardEvent.deviceUserId, "6");
+  assert.equal(employeeCardEvent.eventKind, "RFID_CARD");
+  assert.equal(employeeCardEvent.authenticationMode, "card");
+
+  const cardOnlyEvent = normalizeHikvisionEvent({
+    cardNo: "1234567890", time: "2026-10-11T10:10:03+05:45", serialNo: 302,
+  }, "GR6140877");
+  assert.equal(cardOnlyEvent.deviceUserId, "1234567890");
+  assert.equal(cardOnlyEvent.eventKind, "RFID_CARD");
 });
 
 test("fixed 10:15 Nepal cutoff calculates whole late minutes", () => {

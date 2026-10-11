@@ -50,7 +50,7 @@ foreach ($source in @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter "*.mjs") 
 # terminal firmware can omit fresh events from a narrow cursor query, while
 # the bounded query consistently returns them.
 $savedConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
-$savedConfig.pollSeconds = 10
+$savedConfig.pollSeconds = 3
 if ($savedConfig.PSObject.Properties.Name -contains "reconciliationMinutes") { $savedConfig.reconciliationMinutes = 1 }
 else { $savedConfig | Add-Member -NotePropertyName reconciliationMinutes -NotePropertyValue 1 }
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -83,5 +83,5 @@ if ($task.State -ne "Running" -or -not $bridgeProcess -or -not $freshLog) {
   $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName
   throw "The supervised background bridge failed its live check (task state $($task.State), result $($taskInfo.LastTaskResult)). Review $installRoot\supervisor.log."
 }
-Write-Host "Supervised background bridge verified: Running. Attendance is checked every 10 seconds." -ForegroundColor Cyan
+Write-Host "Supervised background bridge verified: Running. Attendance is checked every 3 seconds." -ForegroundColor Cyan
 Write-Host "Bridge repaired and started. Log: $installRoot\bridge.log" -ForegroundColor Green

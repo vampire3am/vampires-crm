@@ -115,12 +115,15 @@ export function normalizeHikvisionEvent(raw, deviceSerial, clockOffsetMs = 0) {
   const eventUid = serial == null
     ? md5([deviceSerial,deviceUserId,correctedOccurredAt,raw.major,raw.minor,raw.attendanceStatus].join("|"))
     : String(serial);
+  const authenticationMode = raw.currentVerifyMode ?? raw.verifyMode ?? raw.authenticationMode ?? null;
+  const eventKind = raw.eventKind ?? raw.subEventType
+    ?? (/card/i.test(String(authenticationMode ?? "")) || (raw.cardNo != null && raw.employeeNoString == null && raw.employeeNo == null) ? "RFID_CARD" : "FINGERPRINT");
   return {
     eventUid,
     deviceUserId: String(deviceUserId).trim(),
     occurredAt: correctedOccurredAt,
-    eventKind: raw.eventKind ?? raw.subEventType ?? "FINGERPRINT",
-    authenticationMode: raw.currentVerifyMode ?? raw.verifyMode ?? raw.authenticationMode ?? null,
+    eventKind,
+    authenticationMode,
     attendanceStatus: raw.attendanceStatus ?? raw.attendanceState ?? null,
     raw,
   };
