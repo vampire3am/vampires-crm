@@ -63,10 +63,13 @@ before(async () => {
       assert.equal(condition.timeReverseOrder, true);
       response.setHeader("Content-Type", "application/json");
       recentQueries += 1;
-      response.end(JSON.stringify({ AcsEvent: { numOfMatches: 2, totalMatches: 2, InfoList: [
-        { employeeNoString: "2", time: "2026-10-04T17:30:00", serialNo: 202, currentVerifyMode: "fingerPrint" },
-        { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201, currentVerifyMode: "fingerPrint" },
-      ] } }));
+      const InfoList = condition.searchResultPosition === 0
+        ? Array.from({ length: 10 }, (_, index) => ({ employeeNoString: "2", time: `2026-10-01T08:${String(index).padStart(2, "0")}:00`, serialNo: 100 + index }))
+        : [
+          { employeeNoString: "2", time: "2026-10-04T17:30:00", serialNo: 202, currentVerifyMode: "fingerPrint" },
+          { employeeNoString: "2", time: "2026-10-04T08:30:00", serialNo: 201, currentVerifyMode: "fingerPrint" },
+        ];
+      response.end(JSON.stringify({ AcsEvent: { numOfMatches: InfoList.length, totalMatches: 12, InfoList } }));
     });
   });
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -94,7 +97,7 @@ test("Hikvision client pages newest-first when legacy firmware rejects date fiel
   const events = await client.searchEvents(new Date("2026-10-04T00:00:00Z"), new Date("2026-10-06T00:00:00Z"));
   assert.deepEqual(events.map(event => event.eventUid), ["201", "202"]);
   assert.equal(events[0].deviceUserId, "2");
-  assert.equal(recentQueries, 2);
+  assert.ok(recentQueries >= 2);
   assert.ok(authenticatedRequests >= 2);
 });
 

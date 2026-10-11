@@ -286,7 +286,11 @@ export class HikvisionClient {
       // access controllers accept UUIDs, but the 1.4.x attendance firmware can
       // reject their hyphens as badJsonFormat.
       const searchID = `${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-16);
-      for (let position = 0; position < 100000; position += maxResults) {
+      let position = 0;
+      let recentDirection = 1;
+      const visitedPositions = new Set();
+      while (position >= 0 && position < 100000 && !visitedPositions.has(position)) {
+        visitedPositions.add(position);
         const condition = {
           searchID,
           searchResultPosition: position,
@@ -362,7 +366,24 @@ export class HikvisionClient {
         }
         const reported = Number(payload?.AcsEvent?.numOfMatches ?? batch.length);
         const total = Number(payload?.AcsEvent?.totalMatches ?? position + reported);
+        if (format === "recent" && position === 0 && reachedOlderEvent && total > maxResults) {
+          // This firmware accepts timeReverseOrder but may silently ignore it.
+          // Jump to the newest (last) page instead of walking through the
+          // terminal's full historical archive, then move backward by page.
+          const lastPosition = Math.floor((total - 1) / maxResults) * maxResults;
+          if (!visitedPositions.has(lastPosition)) {
+            recentDirection = -1;
+            position = lastPosition;
+            continue;
+          }
+        }
+        if (format === "recent" && recentDirection < 0) {
+          if (reachedOlderEvent || position === 0) break;
+          position = Math.max(0, position - maxResults);
+          continue;
+        }
         if (reachedOlderEvent || reported < maxResults || position + reported >= total) break;
+        position += maxResults;
       }
     }
     return [...new Map(results.map(event => [event.eventUid, event])).values()].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
