@@ -58,7 +58,7 @@ const SEARCH_ITEMS = [
   { label: "Mock Tests & Scorecards", detail: "Full simulations, diagnostic results and band evaluations", to: "/mocks", icon: Award },
   { label: "Document Verification Desk", detail: "10-point visa checklist and file status", to: "/documents", icon: FileCheck2 },
   { label: "HRMS & Staff Operations", detail: "Employee master, attendance clock-in, leaves & payroll", to: "/hrms", icon: UserCheck },
-  { label: "HRMS - Payroll Register", detail: "Monthly salary disbursement, SSF & 1% TDS", to: "/hrms?tab=payroll", icon: Wallet },
+  { label: "HRMS - Payroll Register", detail: "Automated BS-calendar salary and approved deductions", to: "/hrms?tab=payroll", icon: Wallet },
   { label: "HRMS - Attendance Clock-In", detail: "Biometric and daily punch-in log", to: "/hrms?tab=attendance", icon: Clock },
   { label: "HRMS Reports Centre", detail: "Employee, attendance, leave, payroll, salary, performance, KPI, appraisal and workforce reports", to: "/hrms/reports", icon: BarChart3 },
   { label: "HRMS Settings Centre", detail: "Departments, policies, payroll, tax, documents, approvals and notifications", to: "/hrms/settings", icon: Settings },
