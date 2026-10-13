@@ -1193,20 +1193,32 @@ export function HrmsWorkspace() {
       {/* TAB 4: PAYROLL & SALARY VOUCHERS */}
       {activeTab === "payroll" && (
         <section className="payroll-workspace">
-          <header className="payroll-workspace-header"><div><span className="page-category-eyebrow">Finance operations</span><h3>Payroll</h3><p>Prepare, review, approve and disburse monthly employee payroll.</p></div><div className="payroll-period-control"><Calendar size={16}/><select aria-label="Payroll month" value={payrollMonth} onChange={event=>{setPayrollMonth(event.target.value);setActivePayslip(null)}}>{payrollMonths.map(month=><option key={month} value={month}>{formatBsMonth(month)} BS</option>)}</select></div></header>
+          <header className="payroll-workspace-header">
+            <div><span className="page-category-eyebrow">Finance operations</span><h3>Monthly payroll</h3><p>Review the selected BS month, resolve the cycle, and hand approved payroll to Finance.</p></div>
+            <div className="payroll-period-control"><Calendar size={16}/><label><span>Payroll month</span><select aria-label="Payroll month" value={payrollMonth} onChange={event=>{setPayrollMonth(event.target.value);setActivePayslip(null)}}>{payrollMonths.map(month=><option key={month} value={month}>{formatBsMonth(month)} BS</option>)}</select></label></div>
+          </header>
 
-          <div className="payroll-progress" aria-label="Payroll approval workflow">{[
+          <div className="payroll-command-deck">
+            <section className="payroll-balance-panel">
+              <div className="payroll-balance-heading"><span>Net payable</span><b className={`payroll-status status-${(payrollRun?.status??"draft").toLowerCase()}`}>{payrollRun?.status?.replace("_"," ")??"Not generated"}</b></div>
+              <strong className="payroll-balance-amount"><small>NPR</small>{payrollNet.toLocaleString(undefined,{minimumFractionDigits:2})}</strong>
+              <dl><div><dt>Gross payroll</dt><dd>NPR {payrollGross.toLocaleString(undefined,{minimumFractionDigits:2})}</dd></div><div><dt>Deductions</dt><dd>NPR {payrollDeductions.toLocaleString(undefined,{minimumFractionDigits:2})}</dd></div></dl>
+            </section>
+            <section className="payroll-cycle-panel">
+              <header><div><span>Approval cycle</span><strong>{formatBsMonth(payrollMonth)} BS</strong></div><small>{payrollRun?"Follow the controlled handoff sequence":"Run payroll to open this cycle"}</small></header>
+              <div className="payroll-progress" aria-label="Payroll approval workflow">{[
             {label:"Draft",status:"DRAFT",caption:payrollRun?"Complete":"Pending"},
             {label:"Reviewed",status:"REVIEWED",caption:payrollRun&&payrollRun.status!=="DRAFT"?"Complete":"Pending"},
             {label:"Approved",status:"APPROVED",caption:["APPROVED","FINALIZED","PAID"].includes(payrollRun?.status??"")?"Complete":"Pending"},
             {label:"Finalized",status:"FINALIZED",caption:["FINALIZED","PAID"].includes(payrollRun?.status??"")?"Complete":"Pending"},
             {label:"Paid",status:"PAID",caption:payrollRun?.status==="PAID"?"Complete":"Pending"},
           ].map((step,index)=>{const order=["DRAFT","REVIEWED","APPROVED","FINALIZED","PAID"];const currentIndex=payrollRun?order.indexOf(payrollRun.status):-1;return <div key={step.status} className={`${index<=currentIndex?"complete":""} ${index===currentIndex?"current":""}`}><span>{index<currentIndex?<Check size={13}/>:index+1}</span><div><strong>{step.label}</strong><small>{step.caption}</small></div></div>})}</div>
+            </section>
+          </div>
 
-          <div className="payroll-kpi-grid">
+          <div className="payroll-ledger-strip">
             <article><span className="navy"><Wallet size={18}/></span><div><small>Gross payroll</small><strong>NPR {payrollGross.toLocaleString(undefined,{minimumFractionDigits:2})}</strong><em>Before deductions</em></div></article>
             <article><span className="rose"><UserMinus size={18}/></span><div><small>Total deductions</small><strong>NPR {payrollDeductions.toLocaleString(undefined,{minimumFractionDigits:2})}</strong><em>Confirmed unpaid units, approved tax and deductions</em></div></article>
-            <article><span className="emerald">Rs</span><div><small>Net payable</small><strong>NPR {payrollNet.toLocaleString(undefined,{minimumFractionDigits:2})}</strong><em>Employee disbursement</em></div></article>
             <article><span className="blue"><Users size={18}/></span><div><small>Employees processed</small><strong>{payrollMonthRows.length} / {staffList.filter(item=>["ACTIVE","PROBATION","ON_LEAVE"].includes(item.status)).length}</strong><em>{staffList.length?Math.round(payrollMonthRows.length/staffList.length*100):0}% of active staff</em></div></article>
             <article><span className="amber"><Clock size={18}/></span><div><small>Workflow status</small><strong>{payrollRun&&!["PAID","REVERSED"].includes(payrollRun.status)?1:0}</strong><em>{payrollRun?.status?.replace("_"," ")??"Not generated"}</em></div></article>
           </div>
